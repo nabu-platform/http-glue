@@ -1,0 +1,8 @@
+files = file.list(fileRegex: ".*\.css")
+minimized = replace("\.min", "", retain(".*\.min\..*", files))
+files = remove(minimized, files)
+
+for (file : files)
+	stylesheets = array(stylesheets, "<link rel='stylesheet' type='text/css' href='/" + file + "'/>")
+	
+echo(join("\n\t\t", stylesheets))

@@ -1,0 +1,10 @@
+files = file.list(fileRegex: ".*\.js")
+minimized = replace("\.min", "", retain(".*\.min\..*", files))
+files = remove(minimized, files)
+files = remove(".*test.*", files)
+files = remove(".*mock.*", files)
+
+for (file : files)
+	scripts = array(scripts, "<script src='/" + file + "'></script>")
+	
+echo(join("\n\t\t", scripts))
