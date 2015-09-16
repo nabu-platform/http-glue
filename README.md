@@ -75,7 +75,7 @@ There are two ways to set the response data:
 
 Assuming you use the provided methods for authentication, you can do this:
 
-```
+```python
 @role guest
 doSomething()
 
