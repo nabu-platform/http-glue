@@ -32,6 +32,7 @@ import be.nabu.glue.api.OutputFormatter;
 import be.nabu.glue.api.Script;
 import be.nabu.glue.api.ScriptRepository;
 import be.nabu.glue.impl.DefaultOptionalTypeProvider;
+import be.nabu.glue.impl.SimpleExecutionContext;
 import be.nabu.glue.impl.SimpleExecutionEnvironment;
 import be.nabu.glue.impl.formatters.SimpleOutputFormatter;
 import be.nabu.glue.impl.methods.ScriptMethods;
@@ -331,7 +332,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			Map<String, List<String>> queryProperties = URIUtils.getQueryProperties(uri);
 			
 			List<Header> headersToAdd = scanBefore ? scan(request, queryProperties, formParameters, cookies, input, pathParameters, script.getRoot()) : null;
-			ScriptRuntime runtime = new ScriptRuntime(script, environment, "true".equals(environment.getParameters().get("debug")), input);
+			SimpleExecutionContext executionContext = new SimpleExecutionContext(environment, null, "true".equals(environment.getParameters().get("debug")));
+			executionContext.setOutputCurrentLine(false);
+			executionContext.setPrincipal(token);
+			ScriptRuntime runtime = new ScriptRuntime(script, executionContext, input);
 			
 			// set the context
 			runtime.getContext().put(RequestMethods.REQUEST, request);
