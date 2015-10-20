@@ -293,7 +293,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// check permissions automatically
 			if (permissionHandler != null) {
 				if (!permissionHandler.hasPermission(token, context, request.getMethod().toLowerCase())) {
-					throw new HTTPException(401, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have permission to '" + request.getMethod().toLowerCase() + "' on: " + context);
+					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have permission to '" + request.getMethod().toLowerCase() + "' on: " + context);
 				}
 			}
 
