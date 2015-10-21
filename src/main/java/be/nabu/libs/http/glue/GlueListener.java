@@ -57,6 +57,7 @@ import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.libs.http.glue.impl.GlueHTTPFormatter;
 import be.nabu.libs.http.glue.impl.RequestMethods;
 import be.nabu.libs.http.glue.impl.ResponseMethods;
+import be.nabu.libs.http.glue.impl.ServerMethods;
 import be.nabu.libs.http.glue.impl.SessionMethods;
 import be.nabu.libs.http.glue.impl.UserMethods;
 import be.nabu.libs.resources.URIUtils;
@@ -338,6 +339,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			ScriptRuntime runtime = new ScriptRuntime(script, executionContext, input);
 			
 			// set the context
+			runtime.getContext().put(ServerMethods.ROOT_PATH, serverPath);
 			runtime.getContext().put(RequestMethods.REQUEST, request);
 			runtime.getContext().put(RequestMethods.GET, queryProperties);
 			runtime.getContext().put(RequestMethods.POST, formParameters);
@@ -379,7 +381,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			session = getSession(sessionProvider, runtime); 
 			// set a cookie for the session if it's a new session
 			if (session != null && !session.getId().equals(originalSessionId)) {
-				headers.add(HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId()));
+				ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
+				cookieHeader.addComment("Path=" + serverPath);
+				cookieHeader.addComment("HttpOnly");
+				headers.add(cookieHeader);
 			}
 			
 			// required headers
@@ -433,7 +438,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					// otherwise it is impossible to perform the csrf check on incoming form data
 					if (session == null) {
 						session = sessionProvider.newSession();
-						headers.add(HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId()));
+						ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
+						cookieHeader.addComment("Path=" + serverPath);
+						cookieHeader.addComment("HttpOnly");
+						headers.add(cookieHeader);
 						runtime.getContext().put(SessionMethods.SESSION, session);
 					}
 					// remove any previously existing CSRF token

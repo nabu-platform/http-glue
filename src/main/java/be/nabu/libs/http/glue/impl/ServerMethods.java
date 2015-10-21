@@ -11,6 +11,12 @@ import be.nabu.libs.http.HTTPException;
 @MethodProviderClass(namespace = "server")
 public class ServerMethods {
 
+	public static final String ROOT_PATH = "rootPath";
+	
+	public static String root() {
+		return (String) ScriptRuntime.getRuntime().getContext().get(ROOT_PATH);
+	}
+	
 	public static void fail(String message, Integer code) {
 		getLogger().error(message);
 		throw new HTTPException(code == null ? 500 : code, message);

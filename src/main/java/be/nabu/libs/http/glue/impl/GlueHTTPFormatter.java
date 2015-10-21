@@ -67,7 +67,7 @@ public class GlueHTTPFormatter extends SimpleOutputFormatter {
 				return true;
 			}
 			for (String permissionToCheck : permission.split("[\\s,]+")) {
-				if (UserMethods.hasPermission(realm, permissionToCheck, RequestMethods.method().toLowerCase())) {
+				if (UserMethods.hasPermission(permissionToCheck, RequestMethods.method().toLowerCase())) {
 					return true;
 				}
 			}

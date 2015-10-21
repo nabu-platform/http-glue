@@ -20,6 +20,48 @@ import be.nabu.libs.http.glue.GlueListener;
 @MethodProviderClass(namespace = "user")
 public class UserMethods {
 
+	public static final class SharedSecretPrincipalImplementation implements SharedSecretPrincipal {
+		private final String secret;
+		private final String name;
+		private static final long serialVersionUID = 1L;
+
+		private SharedSecretPrincipalImplementation(String secret, String name) {
+			this.secret = secret;
+			this.name = name;
+		}
+
+		@Override
+		public String getName() {
+			return name;
+		}
+
+		@Override
+		public String getSecret() {
+			return secret;
+		}
+	}
+
+	public static final class BasicPrincipalImplementation implements BasicPrincipal {
+		private final String password;
+		private final String name;
+		private static final long serialVersionUID = 1L;
+
+		private BasicPrincipalImplementation(String password, String name) {
+			this.password = password;
+			this.name = name;
+		}
+
+		@Override
+		public String getName() {
+			return name;
+		}
+
+		@Override
+		public String getPassword() {
+			return password;
+		}
+	}
+
 	public static final String SSL_ONLY_SECRET = "sslOnlySecret";
 	public static final String AUTHENTICATOR = "authenticator";
 	public static final String ROLE_HANDLER = "roleHandler";
@@ -29,10 +71,8 @@ public class UserMethods {
 	public static final String REALM = "realm";
 	
 	@GlueMethod(description = "Tries to remember the user based on a shared secret")
-	public static boolean remember(@GlueParam(name = "realm", defaultValue = "default") String realm) {
-		if (realm == null) {
-			realm = realm();
-		}
+	public static boolean remember() {
+		String realm = realm();
 		String cookie = RequestMethods.cookie("Realm-" + realm);
 		if (cookie != null) {
 			int index = cookie.indexOf('@');
@@ -41,17 +81,7 @@ public class UserMethods {
 				final String secret = cookie.substring(index + 1);
 				Authenticator authenticator = (Authenticator) ScriptRuntime.getRuntime().getContext().get(AUTHENTICATOR);
 				if (authenticator != null) {
-					Token token = authenticator.authenticate(realm, new SharedSecretPrincipal() {
-						private static final long serialVersionUID = 1L;
-						@Override
-						public String getName() {
-							return name;
-						}
-						@Override
-						public String getSecret() {
-							return secret;
-						}
-					});
+					Token token = authenticator.authenticate(realm, new SharedSecretPrincipalImplementation(secret, name));
 					if (token != null) {
 						SessionMethods.create(true);
 						SessionMethods.set(GlueListener.buildTokenName(realm), token);
@@ -68,45 +98,28 @@ public class UserMethods {
 	}
 	
 	@GlueMethod(description = "Allows you to retrieve the token for a certain realm")
-	public static Token token(@GlueParam(name = "realm", defaultValue = "default") String realm) {
-		if (realm == null) {
-			realm = realm();
-		}
-		return (Token) SessionMethods.get(GlueListener.buildTokenName(realm));
+	public static Token token() {
+		return (Token) SessionMethods.get(GlueListener.buildTokenName(realm()));
 	}
 	
 	@GlueMethod(description = "Authenticates the user with the given password. If succesful, it recreates the session to prevent session spoofing.", returns = "boolean")
 	public static boolean authenticate( 
-			@GlueParam(name = "realm", defaultValue = "default", description = "The realm the user belongs to") String realm,
 			@GlueParam(name = "name", description = "The user name") final String name, 
 			@GlueParam(name = "password", description = "The user password") final String password,
 			@GlueParam(name = "remember", description = "Whether or not to remember this login", defaultValue = "true") final Boolean remember) {
 		
-		if (realm == null) {
-			realm = realm();
-		}
+		String realm = realm();
 		Authenticator authenticator = (Authenticator) ScriptRuntime.getRuntime().getContext().get(AUTHENTICATOR);
 		if (authenticator != null) {
-			Token token = authenticator.authenticate(realm, new BasicPrincipal() {
-				private static final long serialVersionUID = 1L;
-				@Override
-				public String getName() {
-					return name;
-				}
-				@Override
-				public String getPassword() {
-					return password;
-				}
-				
-			});
+			Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(password, name));
 			// if we have generated a token with a secret, set it in a cookie to be remembered
-			if (token instanceof TokenWithSecret && (remember == null || remember)) {
+			if (token instanceof TokenWithSecret && ((TokenWithSecret) token).getSecret() != null && (remember == null || remember)) {
 				ResponseMethods.cookie(
 					"Realm-" + realm, 
 					name + "@" + ((TokenWithSecret) token).getSecret(), 
 					token.getValidUntil(),
 					// path
-					null, 
+					ServerMethods.root(), 
 					// domain
 					null, 
 					// secure
@@ -126,22 +139,16 @@ public class UserMethods {
 	}
 	
 	@GlueMethod(description = "Check if the user is authenticated for a given realm", returns = "boolean")
-	public static boolean isAuthenticated(@GlueParam(name = "realm", defaultValue = "default", description = "The realm you want to validate") String realm) {
-		if (realm == null) {
-			realm = realm();
-		}
+	public static boolean isAuthenticated() {
+		String realm = realm();
 		Token token = (Token) SessionMethods.get(GlueListener.buildTokenName(realm));
 		TokenValidator validator = (TokenValidator) ScriptRuntime.getRuntime().getContext().get(TOKEN_VALIDATOR);
 		return token != null && ((validator == null && token.getValidUntil().after(new Date())) || validator.isValid(token));
 	}
 	
 	@GlueMethod(description = "Checks if a user has certain roles")
-	public static boolean hasRoles(
-			@GlueParam(name = "realm", defaultValue = "default", description = "The realm you want to check the roles for") String realm, 
-			@GlueParam(name = "roles", description = "The roles you want to check") String...roles) {
-		if (realm == null) {
-			realm = realm();
-		}
+	public static boolean hasRoles(@GlueParam(name = "roles", description = "The roles you want to check") String...roles) {
+		String realm = realm();
 		Token token = (Token) SessionMethods.get(GlueListener.buildTokenName(realm));
 		RoleHandler handler = (RoleHandler) ScriptRuntime.getRuntime().getContext().get(ROLE_HANDLER);
 		// the token can be null, in that case the role handler is supposed to check for anonymous access
@@ -150,12 +157,9 @@ public class UserMethods {
 	
 	@GlueMethod(description = "Checks if a user has permission to do something")
 	public static boolean hasPermission(
-		@GlueParam(name = "realm", defaultValue = "default", description = "The realm you want to check the roles for") String realm,
 		@GlueParam(name = "context", description = "The context where you want to perform the action") String context,
 		@GlueParam(name = "action", description = "The action you want to perform on the context") String action) {
-		if (realm == null) {
-			realm = realm();
-		}
+		String realm = realm();
 		Token token = (Token) SessionMethods.get(GlueListener.buildTokenName(realm));
 		PermissionHandler handler = (PermissionHandler) ScriptRuntime.getRuntime().getContext().get(PERMISSION_HANDLER);
 		// the token can be null, in that case the role handler is supposed to check for anonymous access
