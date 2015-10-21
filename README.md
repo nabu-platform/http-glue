@@ -161,6 +161,7 @@ The methods are divided by their domain. Unlike most glue methods they do not re
 	- **user.hasPermission(context, action)**: checks if the user has the given permission
 	- **user.salt()**: generates a new salt based on a type 4 UUID
 - Server methods
+	- **server.root()**: returns the root path of your current application
 	- **server.fail(message, code)**: a HTTP error is created for the given code (500 by default) with the given message
 	- **server.abort()**: stop the script from running without failure. Any response set up to that point is returned.
 	- There are some log methods at different levels that use slf4j in the background

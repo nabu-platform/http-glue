@@ -15,6 +15,7 @@ import be.nabu.libs.authentication.api.TokenWithSecret;
 import be.nabu.libs.authentication.api.principals.BasicPrincipal;
 import be.nabu.libs.authentication.api.principals.SharedSecretPrincipal;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
+import be.nabu.libs.http.HTTPException;
 import be.nabu.libs.http.glue.GlueListener;
 
 @MethodProviderClass(namespace = "user")
@@ -111,28 +112,33 @@ public class UserMethods {
 		String realm = realm();
 		Authenticator authenticator = (Authenticator) ScriptRuntime.getRuntime().getContext().get(AUTHENTICATOR);
 		if (authenticator != null) {
-			Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(password, name));
-			// if we have generated a token with a secret, set it in a cookie to be remembered
-			if (token instanceof TokenWithSecret && ((TokenWithSecret) token).getSecret() != null && (remember == null || remember)) {
-				ResponseMethods.cookie(
-					"Realm-" + realm, 
-					name + "@" + ((TokenWithSecret) token).getSecret(), 
-					token.getValidUntil(),
-					// path
-					ServerMethods.root(), 
-					// domain
-					null, 
-					// secure
-					(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
-					// http only
-					true
-				);
+			try {
+				Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(password, name));
+				// if we have generated a token with a secret, set it in a cookie to be remembered
+				if (token instanceof TokenWithSecret && ((TokenWithSecret) token).getSecret() != null && (remember == null || remember)) {
+					ResponseMethods.cookie(
+						"Realm-" + realm, 
+						name + "@" + ((TokenWithSecret) token).getSecret(), 
+						token.getValidUntil(),
+						// path
+						ServerMethods.root(), 
+						// domain
+						null, 
+						// secure
+						(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
+						// http only
+						true
+					);
+				}
+				// recreate the session to prevent session spoofing
+				if (token != null) {
+					SessionMethods.create(true);
+					SessionMethods.set(GlueListener.buildTokenName(realm), token);
+					return true;
+				}
 			}
-			// recreate the session to prevent session spoofing
-			if (token != null) {
-				SessionMethods.create(true);
-				SessionMethods.set(GlueListener.buildTokenName(realm), token);
-				return true;
+			catch (RuntimeException e) {
+				throw new HTTPException(401, e);
 			}
 		}
 		return false;
