@@ -15,7 +15,6 @@ import be.nabu.libs.authentication.api.TokenWithSecret;
 import be.nabu.libs.authentication.api.principals.BasicPrincipal;
 import be.nabu.libs.authentication.api.principals.SharedSecretPrincipal;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
-import be.nabu.libs.http.HTTPException;
 import be.nabu.libs.http.glue.GlueListener;
 
 @MethodProviderClass(namespace = "user")
@@ -76,7 +75,7 @@ public class UserMethods {
 		String realm = realm();
 		String cookie = RequestMethods.cookie("Realm-" + realm);
 		if (cookie != null) {
-			int index = cookie.indexOf('@');
+			int index = cookie.indexOf('/');
 			if (index > 0) {
 				final String name = cookie.substring(0, index);
 				final String secret = cookie.substring(index + 1);
@@ -112,44 +111,40 @@ public class UserMethods {
 		String realm = realm();
 		Authenticator authenticator = (Authenticator) ScriptRuntime.getRuntime().getContext().get(AUTHENTICATOR);
 		if (authenticator != null) {
-			try {
-				Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(password, name));
-				// if we have generated a token with a secret, set it in a cookie to be remembered
-				if (token instanceof TokenWithSecret && ((TokenWithSecret) token).getSecret() != null && (remember == null || remember)) {
-					ResponseMethods.cookie(
-						"Realm-" + realm, 
-						name + "@" + ((TokenWithSecret) token).getSecret(), 
-						token.getValidUntil(),
-						// path
-						ServerMethods.root(), 
-						// domain
-						null, 
-						// secure
-						(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
-						// http only
-						true
-					);
-				}
-				// recreate the session to prevent session spoofing
-				if (token != null) {
-					SessionMethods.create(true);
-					SessionMethods.set(GlueListener.buildTokenName(realm), token);
-					return true;
-				}
+			Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(password, name));
+			// if we have generated a token with a secret, set it in a cookie to be remembered
+			if (token instanceof TokenWithSecret && ((TokenWithSecret) token).getSecret() != null && (remember == null || remember)) {
+				ResponseMethods.cookie(
+					"Realm-" + realm, 
+					name + "/" + ((TokenWithSecret) token).getSecret(), 
+					// if there is no valid until in the token, set it to a year
+					token.getValidUntil() == null ? new Date(new Date().getTime() + 1000l*60*60*24*365) : token.getValidUntil(),
+					// path
+					ServerMethods.root(), 
+					// domain
+					null, 
+					// secure
+					(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
+					// http only
+					true
+				);
 			}
-			catch (RuntimeException e) {
-				throw new HTTPException(401, e);
+			// recreate the session to prevent session spoofing
+			if (token != null) {
+				SessionMethods.create(true);
+				SessionMethods.set(GlueListener.buildTokenName(realm), token);
+				return true;
 			}
 		}
 		return false;
 	}
 	
 	@GlueMethod(description = "Check if the user is authenticated for a given realm", returns = "boolean")
-	public static boolean isAuthenticated() {
+	public static boolean authenticated() {
 		String realm = realm();
 		Token token = (Token) SessionMethods.get(GlueListener.buildTokenName(realm));
 		TokenValidator validator = (TokenValidator) ScriptRuntime.getRuntime().getContext().get(TOKEN_VALIDATOR);
-		return token != null && ((validator == null && token.getValidUntil().after(new Date())) || validator.isValid(token));
+		return token != null && ((validator == null && (token.getValidUntil() == null || token.getValidUntil().after(new Date()))) || validator.isValid(token));
 	}
 	
 	@GlueMethod(description = "Checks if a user has certain roles")

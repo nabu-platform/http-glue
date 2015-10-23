@@ -42,7 +42,7 @@ public class ServerMethods {
 		ScriptRuntime.getRuntime().abort();
 	}
 	
-	private static Logger getLogger() {
+	static Logger getLogger() {
 		return LoggerFactory.getLogger(ScriptUtils.getFullName(ScriptRuntime.getRuntime().getScript()));
 	}
 }

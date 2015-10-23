@@ -156,7 +156,7 @@ The methods are divided by their domain. Unlike most glue methods they do not re
 - User methods
 	- **user.authenticate(name, password, shouldRemember)**: authenticate the user with the given name and password. The shouldRemember boolean (default true) indicates whether or not a secret should be used to remember the user outside of the session. The availability of the remember option is dependent on the authenticator that is used however as not all authenticators support secrets. **Important**: successful authentication is automatically followed by generation of a new session to prevent fixation.
 	- **user.remember()**: tries to remember the user based on a shared secret. This is again dependent on the authenticator.
-	- **user.isAuthenticated()**: checks if the user is authenticated
+	- **user.authenticated()**: checks if the user is authenticated
 	- **user.hasRoles(roles)**: checks if the user has **all** of the roles listed
 	- **user.hasPermission(context, action)**: checks if the user has the given permission
 	- **user.salt()**: generates a new salt based on a type 4 UUID
