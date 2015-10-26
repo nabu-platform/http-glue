@@ -272,11 +272,15 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 			AuthenticationHeader authenticationHeader = HTTPUtils.getAuthenticationHeader(request);
 			Token token = authenticationHeader == null ? null : authenticationHeader.getToken();
+			
 			// but likely we'll have to check the session for tokens
 			if (token == null && session != null) {
 				token = (Token) session.get(GlueListener.buildTokenName(realm));
 			}
-			else if (token != null && session != null) {
+			else if (token != null) {
+				if (session == null) {
+					session = sessionProvider.newSession();
+				}
 				session.set(buildTokenName(realm), token);
 			}
 			
@@ -352,6 +356,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			runtime.getContext().put(UserMethods.REALM, realm);
 			runtime.getContext().put(SessionMethods.SESSION_PROVIDER, sessionProvider);
 			runtime.getContext().put(ResponseMethods.RESPONSE_PREFERRED_TYPE, preferredContentType);
+			runtime.getContext().put(SessionMethods.SESSION, session);
 			if (filePath != null) {
 				runtime.getContext().put(SystemMethodProvider.CLI_DIRECTORY, filePath);
 			}
