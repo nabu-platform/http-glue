@@ -18,4 +18,17 @@ public class TestPathAnalysis extends TestCase {
 		result = analyzed.analyze("test/haha/something/else");
 		assertTrue(result == null || result.isEmpty());
 	}
+	
+	public void testFullMatchWithVariable() {
+		PathAnalysis analyzed = GlueListener.analyzePath("test/{var1}/something/{var2}");
+		Map<String, String> result = analyzed.analyze("test/haha/something/hehe");
+		assertNotNull(result);
+		assertTrue(!result.isEmpty());
+		// too short
+		result = analyzed.analyze("test/haha/something");
+		assertTrue(result == null || result.isEmpty());
+		// too long
+		result = analyzed.analyze("test/haha/something/hehe/test");
+		assertTrue(result == null || result.isEmpty());
+	}
 }
