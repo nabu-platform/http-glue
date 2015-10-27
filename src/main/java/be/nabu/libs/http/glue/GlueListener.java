@@ -911,6 +911,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			Matcher matcher = pattern.matcher(remainingPath);
 			Map<String, String> values = new HashMap<String, String>();
 			if (matcher.find()) {
+				if (matcher.end() != remainingPath.length()) {
+					return null;
+				}
 				for (int i = 0; i < matcher.groupCount(); i++) {
 					values.put(parameters.get(i), matcher.group(i + 1));
 				}
