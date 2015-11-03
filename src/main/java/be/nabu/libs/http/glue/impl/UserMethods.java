@@ -93,6 +93,30 @@ public class UserMethods {
 		return false;
 	}
 	
+	public static boolean forget() {
+		String realm = realm();
+		String cookie = RequestMethods.cookie("Realm-" + realm);
+		// if the remember cookie exists, clear it
+		if (cookie != null && !"forgotten".equals(cookie)) {
+			ResponseMethods.cookie(
+				"Realm-" + realm, 
+				"forgotten", 
+				// if there is no valid until in the token, set it to a year
+				new Date(new Date().getTime() - 1),
+				// path
+				ServerMethods.root(), 
+				// domain
+				null, 
+				// secure
+				(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
+				// http only
+				true
+			);
+			return true;
+		}
+		return false;
+	}
+	
 	public static String realm() {
 		return (String) ScriptRuntime.getRuntime().getContext().get(REALM);
 	}
