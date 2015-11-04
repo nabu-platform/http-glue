@@ -101,8 +101,8 @@ public class UserMethods {
 			ResponseMethods.cookie(
 				"Realm-" + realm, 
 				"forgotten", 
-				// if there is no valid until in the token, set it to a year
-				new Date(new Date().getTime() - 1),
+				// set in the past
+				new Date(new Date().getTime() - 1000l*60*60*24),
 				// path
 				ServerMethods.root(), 
 				// domain
