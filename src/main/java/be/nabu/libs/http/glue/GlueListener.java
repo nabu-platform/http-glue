@@ -123,6 +123,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private List<ContentRewriter> contentRewriters = new ArrayList<ContentRewriter>();
 	
 	private static Logger logger = LoggerFactory.getLogger(GlueListener.class);
+
+	/**
+	 * You can toggle this if you always want the user to have a session
+	 */
+	private boolean alwaysCreateSession = false;
 	
 	/**
 	 * Only enable remember secret on SSL
@@ -269,6 +274,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// get the original session id to judge whether or not we have to set it later
 			String originalSessionId = getSessionId(cookies);
 			Session session = originalSessionId != null && sessionProvider != null ? sessionProvider.getSession(originalSessionId) : null;
+			if (session == null && alwaysCreateSession) {
+				session = sessionProvider.newSession();
+			}
 
 			AuthenticationHeader authenticationHeader = HTTPUtils.getAuthenticationHeader(request);
 			Token token = authenticationHeader == null ? null : authenticationHeader.getToken();
@@ -995,5 +1003,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public List<ContentRewriter> getContentRewriters() {
 		return contentRewriters;
+	}
+
+	public boolean isAlwaysCreateSession() {
+		return alwaysCreateSession;
+	}
+
+	public void setAlwaysCreateSession(boolean alwaysCreateSession) {
+		this.alwaysCreateSession = alwaysCreateSession;
 	}
 }
