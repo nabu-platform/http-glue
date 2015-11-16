@@ -140,7 +140,7 @@ public class UserMethods {
 			if (token instanceof TokenWithSecret && ((TokenWithSecret) token).getSecret() != null && (remember == null || remember)) {
 				ResponseMethods.cookie(
 					"Realm-" + realm, 
-					name + "/" + ((TokenWithSecret) token).getSecret(), 
+					token.getName() + "/" + ((TokenWithSecret) token).getSecret(), 
 					// if there is no valid until in the token, set it to a year
 					token.getValidUntil() == null ? new Date(new Date().getTime() + 1000l*60*60*24*365) : token.getValidUntil(),
 					// path

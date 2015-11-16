@@ -6,15 +6,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.TimeZone;
 
 import javax.ws.rs.core.MediaType;
 
@@ -24,6 +21,7 @@ import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.annotations.GlueParam;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.api.HTTPRequest;
+import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.libs.http.glue.GlueListener;
 import be.nabu.libs.types.ComplexContentWrapperFactory;
 import be.nabu.libs.types.api.ComplexContent;
@@ -35,6 +33,7 @@ import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.ByteBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
 import be.nabu.utils.mime.api.Header;
+import be.nabu.utils.mime.api.ModifiableHeader;
 import be.nabu.utils.mime.impl.MimeHeader;
 import be.nabu.utils.mime.impl.MimeUtils;
 import be.nabu.utils.xml.XMLUtils;
@@ -49,8 +48,6 @@ public class ResponseMethods {
 	public static final String RESPONSE_CHARSET = "responseCharset";
 	public static final String RESPONSE_DEFAULT_CHARSET = "responseDefaultCharset";
 	public static final String RESPONSE_PREFERRED_TYPE = "responsePreferredType";
-	
-	private static ThreadLocal<SimpleDateFormat> formatter = new ThreadLocal<SimpleDateFormat>();
 	
 	@SuppressWarnings("unchecked")
 	public static Header header(@GlueParam(name = "name") String name, @GlueParam(name = "value") String value) throws ParseException, IOException {
@@ -169,28 +166,7 @@ public class ResponseMethods {
 	
 	@SuppressWarnings("unchecked")
 	public static Header cookie(String key, String value, Date expires, String path, String domain, Boolean secure, Boolean httpOnly) {
-		MimeHeader header = new MimeHeader("Set-Cookie", key + "=" + value);
-		if (expires != null) {
-			if (formatter.get() == null) {
-				SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd-MMM-yyyy HH:mm:ss 'GMT'", Locale.US);
-				dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
-				formatter.set(dateFormatter);
-			}
-			header.addComment("Expires=" + formatter.get().format(expires));
-		}
-		if (path != null) {
-			header.addComment("Path=" + path);
-		}
-		if (domain != null) {
-			header.addComment("Domain=" + domain);
-		}
-		if (secure != null && secure) {
-			header.addComment("Secure");
-		}
-		if (httpOnly != null && httpOnly) {
-			header.addComment("HttpOnly");
-		}
-		
+		ModifiableHeader header = HTTPUtils.newSetCookieHeader(key, value, expires, path, domain, secure, httpOnly);
 		List<Header> headers = (List<Header>) ScriptRuntime.getRuntime().getContext().get(ResponseMethods.RESPONSE_HEADERS);
 		if (headers == null) {
 			headers = new ArrayList<Header>();
