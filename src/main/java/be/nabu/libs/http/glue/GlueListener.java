@@ -390,7 +390,6 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (headersToAdd != null) {
 				headers.addAll(headersToAdd);
 			}
-			
 			session = getSession(sessionProvider, runtime); 
 			// set a cookie for the session if it's a new session
 			if (session != null && !session.getId().equals(originalSessionId)) {
@@ -518,14 +517,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			return new DefaultHTTPResponse(code, HTTPCodes.getMessage(code), part);
 		}
-		catch (IOException e) {
-			throw new HTTPException(500, e);
-		}
-		catch (ParseException e) {
-			throw new HTTPException(500, e);
-		}
-		catch (FormatException e) {
-			throw new HTTPException(500, e);
+		catch (Exception e) {
+			throw new HTTPException(500, e);	
 		}
 	}
 

@@ -23,13 +23,13 @@ public class GlueTokenResolver implements TokenResolver {
 	
 	@Override
 	public Token getToken(Header...headers) {
-		AuthenticationHeader authenticationHeader = HTTPUtils.getAuthenticationHeader(headers);
-		Token token = authenticationHeader == null ? null : authenticationHeader.getToken();
+		Map<String, List<String>> cookies = HTTPUtils.getCookies(headers);
+		String originalSessionId = GlueListener.getSessionId(cookies);
+		Session session = originalSessionId != null && provider != null ? provider.getSession(originalSessionId) : null;
+		Token token = (Token) session.get(GlueListener.buildTokenName(realm));
 		if (token == null) {
-			Map<String, List<String>> cookies = HTTPUtils.getCookies(headers);
-			String originalSessionId = GlueListener.getSessionId(cookies);
-			Session session = originalSessionId != null && provider != null ? provider.getSession(originalSessionId) : null;
-			token = (Token) session.get(GlueListener.buildTokenName(realm));
+			AuthenticationHeader authenticationHeader = HTTPUtils.getAuthenticationHeader(headers);
+			token = authenticationHeader == null ? null : authenticationHeader.getToken();
 		}
 		return token;
 	}
