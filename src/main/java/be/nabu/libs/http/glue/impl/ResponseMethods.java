@@ -2,6 +2,7 @@ package be.nabu.libs.http.glue.impl;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
@@ -19,6 +20,7 @@ import org.w3c.dom.Document;
 
 import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.annotations.GlueParam;
+import be.nabu.glue.impl.TransactionalCloseable;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.api.HTTPRequest;
 import be.nabu.libs.http.core.HTTPUtils;
@@ -89,9 +91,15 @@ public class ResponseMethods {
 			contentType = null;
 		}
 		else if (response instanceof InputStream) {
+			// IMPORTANT: There was an issue with the stream being set as content being closed by the time it was used for the response (this ended up in 0-byte downloads)
+			// this was because the evaluateexecutor automatically added the stream as a transactioncloseable
+			// so we need to remove the transactionable!
+			ScriptRuntime.getRuntime().removeTransactionable(new TransactionalCloseable((Closeable) response));
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_STREAM, response);
 		}
 		else if (response instanceof ReadableContainer) {
+			// see above for reason
+			ScriptRuntime.getRuntime().removeTransactionable(new TransactionalCloseable((Closeable) response));
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_STREAM, IOUtils.toInputStream((ReadableContainer<ByteBuffer>) response));
 		}
 		else if (response instanceof String) {
