@@ -150,9 +150,7 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 			
 			StringWriter writer = new StringWriter();
 			runtime.setFormatter(new GlueHTTPFormatter(repository, charset, writer));
-			
 			runtime.run();
-
 			// get the headers
 			List<Header> headers = (List<Header>) runtime.getContext().get(ResponseMethods.RESPONSE_HEADERS);
 			if (headers == null) {

@@ -280,7 +280,6 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				session = sessionProvider.newSession();
 			}
 
-
 			Token token = null;
 			// first we try to get the token from the session
 			if (session != null && session.get(GlueListener.buildTokenName(realm)) != null) {
@@ -669,43 +668,46 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		}
 		else if (executor.getContext().getAnnotations().containsKey("content")) {
 			if (entity.getContent() instanceof ContentPart) {
-				// unmarshal the content
-				if (optionalType != null) {
-					ComplexType type = null;
-					try {
-						Script script = repository.getScript(optionalType);
-						if (script != null) {
-							type = GlueTypeUtils.toType(ScriptUtils.getInputs(script), new MapTypeGenerator());
+				ReadableContainer<ByteBuffer> readable = ((ContentPart) entity.getContent()).getReadable();
+				if (readable != null) {
+					// unmarshal the content
+					if (optionalType != null) {
+						ComplexType type = null;
+						try {
+							Script script = repository.getScript(optionalType);
+							if (script != null) {
+								type = GlueTypeUtils.toType(ScriptUtils.getInputs(script), new MapTypeGenerator());
+							}
 						}
-					}
-					catch (ParseException e) {
-						logger.error("Can not parse script '" + type + "'", e);
-					}
-					if (type == null) {
-						DefinedType resolved = DefinedTypeResolverFactory.getInstance().getResolver().resolve(optionalType);
-						if (resolved instanceof ComplexType) {
-							type = (ComplexType) resolved;
+						catch (ParseException e) {
+							logger.error("Can not parse script '" + type + "'", e);
 						}
+						if (type == null) {
+							DefinedType resolved = DefinedTypeResolverFactory.getInstance().getResolver().resolve(optionalType);
+							if (resolved instanceof ComplexType) {
+								type = (ComplexType) resolved;
+							}
+						}
+						if (type == null) {
+							throw new IllegalArgumentException("Can not resolve complex type: " + optionalType);
+						}
+						String contentType = MimeUtils.getContentType(entity.getContent().getHeaders());
+						String charsetName = MimeUtils.getCharset(entity.getContent().getHeaders());
+						UnmarshallableBinding binding = MediaType.APPLICATION_JSON.equals(contentType)
+							? new JSONBinding(type, charset == null ? charset : Charset.forName(charsetName))
+							: new XMLBinding(type, charset == null ? charset : Charset.forName(charsetName));
+						try {
+							value = binding.unmarshal(IOUtils.toInputStream(readable, true), new Window[0]);
+						}
+						catch (ParseException e) {
+							logger.error("Could not parse request data", e);
+							throw new HTTPException(400, "Invalid data");
+						}  
 					}
-					if (type == null) {
-						throw new IllegalArgumentException("Can not resolve complex type: " + optionalType);
+					// just set the stream
+					else {
+						value = IOUtils.toInputStream(readable, true);
 					}
-					String contentType = MimeUtils.getContentType(entity.getContent().getHeaders());
-					String charsetName = MimeUtils.getCharset(entity.getContent().getHeaders());
-					UnmarshallableBinding binding = MediaType.APPLICATION_JSON.equals(contentType)
-						? new JSONBinding(type, charset == null ? charset : Charset.forName(charsetName))
-						: new XMLBinding(type, charset == null ? charset : Charset.forName(charsetName));
-					try {
-						value = binding.unmarshal(IOUtils.toInputStream(((ContentPart) entity.getContent()).getReadable()), new Window[0]);
-					}
-					catch (ParseException e) {
-						logger.error("Could not parse request data", e);
-						throw new HTTPException(400, "Invalid data");
-					}  
-				}
-				// just set the stream
-				else {
-					value = IOUtils.toInputStream(((ContentPart) entity.getContent()).getReadable());
 				}
 			}
 		}
@@ -773,7 +775,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						}
 						// just put the bytes there
 						else {
-							value = IOUtils.toInputStream(readable);
+							value = IOUtils.toInputStream(readable, true);
 						}
 					}
 				}

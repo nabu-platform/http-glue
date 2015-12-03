@@ -119,7 +119,7 @@ Unless specifically disabled in the listener, it will automatically add a CSRF t
 The methods are divided by their domain. Unlike most glue methods they do not rely on their uniqueness in naming which means the coding guideline is to use the full name always.
 
 - Request methods
-	- **request.content()**: get the full content (the actual HTTPRequest object)
+	- **request.content()**: get the full content (the actual HTTPEntity object)
 	- **request.header(name)**: get the first header object for the given name
 	- **request.headers(name)**: get all header objects for the given name
 	- **request.method()**: returns the method of the requests
@@ -139,7 +139,7 @@ The methods are divided by their domain. Unlike most glue methods they do not re
 		- **request.paths(name)**
 		- **request.path(name)**
 - Response methods
-	- **response.header(key, value)**: Adds a header to the response with the given key and value. If you have comments, put them in the value as well.
+	- **response.header(key, value, removeExisting)**: Adds a header to the response with the given key and value (and optionally deletes the current headers with that name). If you have comments, put them in the value as well. Note that if you leave out the value, it will simply remove the headers with that name.
 	- **response.code(number)**: sets the response code
 	- **response.content(content, contentType)**: set the given content and (optionally) the content type for it. If no content type is given, it will be a best effort guess.
 	- **response.cookie(key, value, expires, path, domain, secure, httpOnly)**: set a cookie in the response. Note that as for any method, all parameters are optional and most have sensible defaults.
@@ -147,6 +147,8 @@ The methods are divided by their domain. Unlike most glue methods they do not re
 	- **response.redirect(location, isPermanent)**: redirect the user
 	- **response.notModified()**: send back a response that nothing was modified
 	- **response.cache(maxAge, revalidate, private)**: directly set the cache header
+	- **response.method(method)**: can be used to update the method
+	- **response.target(target)**: can be used to update the target
 - Session methods
 	- **session.get(key)**: get the value for the given key
 	- **session.set(key, value)**: set the value for the given key
@@ -169,4 +171,102 @@ The methods are divided by their domain. Unlike most glue methods they do not re
 		- **server.info(message)**
 		- **server.warn(message)**
 		- **server.error(message)**
-	
+
+# Pre- and Postprocessing
+
+There are quite a few neat preprocessing features available in most http servers, for example apache has `mod_rewrite` to rewrite request targets and methods, `mod_headers` to rewrite headers and `mod_substitute` to rewrite some content.
+
+My biggest gripe with these modules is the new -and rather complex- syntax you have to adhere to to make it work and you are still somewhat limited in how complex your instructions can be.
+
+In the postprocessing department you can usually set error pages based on for example error codes but this is again custom syntax in some config file and usually limited to error codes.
+
+This library provides a glue-based preprocessor and a glue-based postprocessor.
+
+They function more or less the same as the actual glue listener except where the glue listener has an incoming `HTTPRequest` and an outgoing `HTTPResponse`, the preprocessor has an incoming `HTTPRequest` and outgoing `HTTPRequest` as well while the postprocessor has an incoming `HTTPResponse` and also an outgoing `HTTPResponse`.
+
+The existing methods for the glue listener are reused but mapped the "request" methods to the incoming http entity and the "response" methods to the outgoing http entity.
+
+A lot of the same functionality is available in all three scenarios but there are of course some differences. For example the `response.method()` was added solely for preprocessing (as you can not set a method on the response object), sessions are available in pre- and postprocessing but should be used for read-only purposes etc.
+
+**Important**: it is critical that you register the preprocessor as one of the first listeners on the eventing queue, otherwise it might be ignored for some requests. Likewise it is important to register the post processor at an appropriate level depending on what else you have on the pipeline.
+
+## Preprocessing
+
+For example suppose you want to update the method and target of a request:
+
+```python
+@meta
+target ?= null
+# Redirect a request on the root
+if (target == "/")
+	response.target("somethingElse/entirely")
+	response.method("POST")
+```
+
+Or for example add some content to the request:
+
+```python
+@meta
+target ?= null
+@meta
+method ?= null
+
+if (target == "/" && method == "get")
+	response.content(structure(test1: "some stuff here", test2: 1), "application/json")
+```
+
+Or rewrite the incoming request, for example in this case we take an incoming JSON structure, change the value of a field in it and transform it to XML:
+
+```python
+@meta
+target ?= null
+@meta
+method ?= null
+@meta
+contentType ?= null
+if (target == "/" && method == "post" && contentType == "application/json")
+	@content
+	myStructure content ?= null
+	response.content(structure(content, test1: "something else entirely!"), "application/xml")
+```
+
+The incoming request is:
+
+```json
+{"test1": "test", "test2": 5}
+```
+
+The rewritten request becomes:
+
+```xml
+<anonymous>
+	<test2>5</test2>
+	<test1>something else entirely!</test1>
+</anonymous>
+```
+
+## Postprocessing
+
+You can rewrite error responses, for example let's redirect a 404 to another page:
+
+```python
+@meta
+code ?= null
+if (code == 404)
+	redirect("/404.html")
+```
+
+During testing I did not actually have a 404.html available which in this case will trigger an infinite loop of the browser requesting a page that triggers a 404 that redirects to a non-existing 404.html page ad nauseam.
+
+Even though you are in postprocess mode and both request and response are "HTTPResponse" entities, you can (normally) still access the original HTTPRequest because it is generally included in the HTTPResponse, so you could try:
+
+```python
+@meta
+code ?= null
+@meta
+target ?= null
+if (code == 404 && target != null && target != "/404.html")
+	redirect("/404.html")
+```
+
+Note that the null check is used to make sure we actually have the original request target. Some rogue component could be generating responses without the original request attached.
