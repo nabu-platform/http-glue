@@ -2,22 +2,26 @@ package be.nabu.libs.http.glue.impl;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
 
 import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.api.AssignmentExecutor;
 import be.nabu.glue.api.Executor;
+import be.nabu.glue.api.ScriptRepository;
 import be.nabu.glue.impl.formatters.SimpleOutputFormatter;
 import be.nabu.libs.http.glue.GlueListener;
 
 public class GlueHTTPFormatter extends SimpleOutputFormatter {
 
-	private GlueListener listener;
+	private ScriptRepository repository;
+	private Charset charset;
 
-	public GlueHTTPFormatter(GlueListener listener, Writer writer) {
+	public GlueHTTPFormatter(ScriptRepository repository, Charset charset, Writer writer) {
 		super(writer, false);
-		this.listener = listener;
+		this.repository = repository;
+		this.charset = charset;
 	}
 
 	// inject values if requested by annotations
@@ -27,7 +31,9 @@ public class GlueHTTPFormatter extends SimpleOutputFormatter {
 		if (executor instanceof AssignmentExecutor && ((AssignmentExecutor) executor).getVariableName() != null) {
 			String name = ((AssignmentExecutor) executor).getVariableName();
 			try {
-				Object value = listener.getValue(
+				Object value = GlueListener.getValue(
+					repository,
+					charset,
 					RequestMethods.content(), 
 					(AssignmentExecutor) executor, 
 					SessionMethods.getSession(), 

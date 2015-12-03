@@ -7,7 +7,9 @@ import java.util.Map;
 import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.annotations.GlueParam;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
+import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.api.HTTPRequest;
+import be.nabu.libs.http.api.LinkableHTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.utils.mime.api.Header;
 import be.nabu.utils.mime.impl.FormatException;
@@ -16,14 +18,14 @@ import be.nabu.utils.mime.impl.MimeUtils;
 @MethodProviderClass(namespace = "request")
 public class RequestMethods {
 	
-	public static final String REQUEST = "request";
+	public static final String ENTITY = "entity";
 	public static final String GET = "requestGet";
 	public static final String POST = "requestPost";
 	public static final String COOKIES = "requestCookies";
 	public static final String PATH = "requestPath";
 	
-	public static HTTPRequest content() {
-		return (HTTPRequest) ScriptRuntime.getRuntime().getContext().get(REQUEST);
+	public static HTTPEntity content() {
+		return (HTTPEntity) ScriptRuntime.getRuntime().getContext().get(ENTITY);
 	}
 	
 	public static Header header(@GlueParam(name = "name") String name) {
@@ -33,17 +35,37 @@ public class RequestMethods {
 	}
 	
 	public static Header[] headers(@GlueParam(name = "name") String name) {
-		return content().getContent() != null
-			? MimeUtils.getHeaders(name, content().getContent().getHeaders())
-			: null;
+		if (content().getContent() == null) {
+			return null;
+		}
+		else if (name == null) {
+			return content().getContent().getHeaders();
+		}
+		else {
+			return MimeUtils.getHeaders(name, content().getContent().getHeaders());
+		}
 	}
 	
 	public static String method() {
-		return content().getMethod().toLowerCase();
+		HTTPRequest request = null;
+		if (content() instanceof HTTPRequest) {
+			request = (HTTPRequest) content();
+		}
+		else if (content() instanceof LinkableHTTPResponse) {
+			request = ((LinkableHTTPResponse) content()).getRequest();
+		}
+		return request == null ? null : request.getMethod().toLowerCase();
 	}
 	
 	public static String target() {
-		return content().getTarget();
+		HTTPRequest request = null;
+		if (content() instanceof HTTPRequest) {
+			request = (HTTPRequest) content();
+		}
+		else if (content() instanceof LinkableHTTPResponse) {
+			request = ((LinkableHTTPResponse) content()).getRequest();
+		}
+		return request == null ? null : request.getTarget();
 	}
 	
 	public static double version() {
@@ -51,7 +73,14 @@ public class RequestMethods {
 	}
 	
 	public static URI url() throws FormatException {
-		return HTTPUtils.getURI(content(), false);
+		HTTPRequest request = null;
+		if (content() instanceof HTTPRequest) {
+			request = (HTTPRequest) content();
+		}
+		else if (content() instanceof LinkableHTTPResponse) {
+			request = ((LinkableHTTPResponse) content()).getRequest();
+		}
+		return request == null ? null : HTTPUtils.getURI(request, false);
 	}
 	
 	@SuppressWarnings("unchecked")

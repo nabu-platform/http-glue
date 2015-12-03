@@ -22,7 +22,7 @@ import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.annotations.GlueParam;
 import be.nabu.glue.impl.TransactionalCloseable;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
-import be.nabu.libs.http.api.HTTPRequest;
+import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.libs.http.glue.GlueListener;
 import be.nabu.libs.types.ComplexContentWrapperFactory;
@@ -46,22 +46,56 @@ public class ResponseMethods {
 	public static final List<String> allowedTypes = Arrays.asList(MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML);
 	public static final String RESPONSE_HEADERS = "responseHeaders";
 	public static final String RESPONSE_STREAM = "responseStream";
-	public static final String RESPONSE_CODE = "responseCode";
 	public static final String RESPONSE_CHARSET = "responseCharset";
 	public static final String RESPONSE_DEFAULT_CHARSET = "responseDefaultCharset";
 	public static final String RESPONSE_PREFERRED_TYPE = "responsePreferredType";
 	
+	/**
+	 * Specifically for creating a http response
+	 */
+	public static final String RESPONSE_CODE = "responseCode";
+	
+	/**
+	 * Specifically for rewriting
+	 */
+	public static final String RESPONSE_TARGET = "responseTarget";
+	public static final String RESPONSE_METHOD = "responseMethod";
+	public static final String RESPONSE_EMPTY = "responseEmpty";
+	
+	/**
+	 * If you only pass in the header name, it will simply be removed
+	 */
 	@SuppressWarnings("unchecked")
-	public static Header header(@GlueParam(name = "name") String name, @GlueParam(name = "value") String value) throws ParseException, IOException {
-		// the value in this case can include some comments, so parse it
-		Header header = MimeHeader.parseHeader(name + ": " + value);
-		List<Header> headers = (List<Header>) ScriptRuntime.getRuntime().getContext().get(RESPONSE_HEADERS);
-		if (headers == null) {
-			headers = new ArrayList<Header>();
-			ScriptRuntime.getRuntime().getContext().put(RESPONSE_HEADERS, headers);
+	public static Header header(@GlueParam(name = "name") String name, @GlueParam(name = "value") String value, @GlueParam(name = "removeExisting", defaultValue = "true") Boolean removeExisting) throws ParseException, IOException {
+		if (removeExisting == null || removeExisting) {
+			removeHeader(name);
 		}
-		headers.add(header);
-		return header;
+		if (value != null) {
+			// the value in this case can include some comments, so parse it
+			Header header = MimeHeader.parseHeader(name + ": " + value);
+			List<Header> headers = (List<Header>) ScriptRuntime.getRuntime().getContext().get(RESPONSE_HEADERS);
+			if (headers == null) {
+				headers = new ArrayList<Header>();
+				ScriptRuntime.getRuntime().getContext().put(RESPONSE_HEADERS, headers);
+			}
+			headers.add(header);
+			return header;
+		}
+		return null;
+	}
+	
+	public static void target(@GlueParam(name = "target", defaultValue = "/") String target) {
+		if (target == null) {
+			target = "/";
+		}
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_TARGET, target);
+	}
+	
+	public static void method(@GlueParam(name = "method", defaultValue = "GET") String method) {
+		if (method == null) {
+			method = "GET";
+		}
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_METHOD, method);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -84,6 +118,7 @@ public class ResponseMethods {
 	public static void content(Object response, String contentType) throws IOException, ParseException {
 		Charset usedCharset = null;
 		if (response == null) {
+			ScriptRuntime.getRuntime().getContext().put(RESPONSE_EMPTY, true);
 			// nothing is known about the response, unset
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_STREAM, null);
 			removeHeader("Content-Length");
@@ -106,7 +141,7 @@ public class ResponseMethods {
 			usedCharset = getCharset();
 			byte[] bytes = ((String) response).getBytes(usedCharset);
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_STREAM, new ByteArrayInputStream(bytes));
-			header("Content-Length", "" + bytes.length);
+			header("Content-Length", "" + bytes.length, true);
 			// for a string a content type is required, otherwise it is impossible to correctly report the used charset later on (you can update the charset after having set the string content)
 			if (contentType == null) {
 				contentType = "text/html";
@@ -114,7 +149,7 @@ public class ResponseMethods {
 		}
 		else if (response instanceof byte[]) {
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_STREAM, new ByteArrayInputStream((byte []) response));
-			header("Content-Length", "" + ((byte[]) response).length);
+			header("Content-Length", "" + ((byte[]) response).length, true);
 		}
 		else if (response != null) {
 			// if you responded with an array, wrap it
@@ -139,7 +174,7 @@ public class ResponseMethods {
 			}
 			usedCharset = getCharset();
 			// given that we are in a primarily website-driven world, use json as default
-			HTTPRequest request = RequestMethods.content();
+			HTTPEntity request = RequestMethods.content();
 			if (contentType == null) {
 				List<String> acceptedTypes = MimeUtils.getAcceptedContentTypes(request.getContent().getHeaders());
 				acceptedTypes.retainAll(allowedTypes);
@@ -160,14 +195,14 @@ public class ResponseMethods {
 			binding.marshal(output, (ComplexContent) response);
 			byte[] byteArray = output.toByteArray();
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_STREAM, new ByteArrayInputStream(byteArray));
-			header("Content-Length", "" + byteArray.length);
+			header("Content-Length", "" + byteArray.length, true);
 		}
 		if (contentType != null) {
 			if (usedCharset != null) {
-				header("Content-Type", contentType + "; charset=" + getCharset().name());
+				header("Content-Type", contentType + "; charset=" + getCharset().name(), true);
 			}
 			else {
-				header("Content-Type", contentType);
+				header("Content-Type", contentType, true);
 			}
 		}
 	}
@@ -198,7 +233,7 @@ public class ResponseMethods {
 	
 	public static void redirect(String location, Boolean permanent) throws ParseException, IOException {
 		ResponseMethods.code(permanent != null && permanent ? 301 : 307);
-		ResponseMethods.header("Location", location);
+		ResponseMethods.header("Location", location, true);
 		ServerMethods.abort();
 	}
 	
@@ -207,7 +242,6 @@ public class ResponseMethods {
 		ServerMethods.abort();
 	}
 	
-
 	@SuppressWarnings("unchecked")
 	public static Header cache(
 			@GlueParam(name = "maxAge", description = "How long the cache should live, use '0' to indicate that it should not be cached and null to cache indefinately") Long maxAge, 

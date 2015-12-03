@@ -47,8 +47,10 @@ import be.nabu.libs.events.api.EventHandler;
 import be.nabu.libs.http.HTTPCodes;
 import be.nabu.libs.http.HTTPException;
 import be.nabu.libs.http.api.ContentRewriter;
+import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.api.HTTPRequest;
 import be.nabu.libs.http.api.HTTPResponse;
+import be.nabu.libs.http.api.LinkableHTTPResponse;
 import be.nabu.libs.http.api.server.AuthenticationHeader;
 import be.nabu.libs.http.api.server.Session;
 import be.nabu.libs.http.api.server.SessionProvider;
@@ -278,18 +280,23 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				session = sessionProvider.newSession();
 			}
 
-			AuthenticationHeader authenticationHeader = HTTPUtils.getAuthenticationHeader(request);
-			Token token = authenticationHeader == null ? null : authenticationHeader.getToken();
-			
-			// but likely we'll have to check the session for tokens
-			if (token == null && session != null) {
+
+			Token token = null;
+			// first we try to get the token from the session
+			if (session != null && session.get(GlueListener.buildTokenName(realm)) != null) {
 				token = (Token) session.get(GlueListener.buildTokenName(realm));
 			}
-			else if (token != null) {
-				if (session == null) {
-					session = sessionProvider.newSession();
+			// if not from session, try to get it from authentication header
+			else {
+				AuthenticationHeader authenticationHeader = HTTPUtils.getAuthenticationHeader(request);
+				token = authenticationHeader == null ? null : authenticationHeader.getToken();
+				// if we have a token, set it in the session
+				if (token != null) {
+					if (session == null) {
+						session = sessionProvider.newSession();
+					}
+					session.set(buildTokenName(realm), token);
 				}
-				session.set(buildTokenName(realm), token);
 			}
 			
 			// check validity of the token
@@ -352,7 +359,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			
 			// set the context
 			runtime.getContext().put(ServerMethods.ROOT_PATH, serverPath);
-			runtime.getContext().put(RequestMethods.REQUEST, request);
+			runtime.getContext().put(RequestMethods.ENTITY, request);
 			runtime.getContext().put(RequestMethods.GET, queryProperties);
 			runtime.getContext().put(RequestMethods.POST, formParameters);
 			runtime.getContext().put(RequestMethods.COOKIES, cookies);
@@ -371,7 +378,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			
 			// run the script
 			StringWriter writer = new StringWriter();
-			OutputFormatter buffer = scanBefore ? new SimpleOutputFormatter(writer, false) : new GlueHTTPFormatter(this, writer);
+			OutputFormatter buffer = scanBefore ? new SimpleOutputFormatter(writer, false) : new GlueHTTPFormatter(repository, charset, writer);
 			runtime.setFormatter(buffer);
 			runtime.getContext().put(ResponseMethods.RESPONSE_DEFAULT_CHARSET, charset);
 			runtime.run();
@@ -515,7 +522,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (code == null) {
 				code = 200;
 			}
-			return new DefaultHTTPResponse(code, HTTPCodes.getMessage(code), part);
+			return new DefaultHTTPResponse(request, code, HTTPCodes.getMessage(code), part);
 		}
 		catch (Exception e) {
 			throw new HTTPException(500, e);	
@@ -540,12 +547,20 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	public static Session getSession(SessionProvider provider, ScriptRuntime runtime) {
 		Session session = (Session) runtime.getContext().get(SessionMethods.SESSION);
 		if (session == null) {
-			HTTPRequest request = (HTTPRequest) runtime.getContext().get(RequestMethods.REQUEST);
-			Map<String, List<String>> cookies = HTTPUtils.getCookies(request.getContent().getHeaders());
-			String sessionId = GlueListener.getSessionId(cookies);
-			if (sessionId != null) {
-				if (provider != null) {
-					session = provider.getSession(sessionId);
+			HTTPRequest request = null;
+			if (runtime.getContext().get(RequestMethods.ENTITY) instanceof HTTPRequest) {
+				request = (HTTPRequest) runtime.getContext().get(RequestMethods.ENTITY);
+			}
+			else if (runtime.getContext().get(RequestMethods.ENTITY) instanceof LinkableHTTPResponse) {
+				request = ((LinkableHTTPResponse) runtime.getContext().get(RequestMethods.ENTITY)).getRequest();
+			}
+			if (request != null) {
+				Map<String, List<String>> cookies = HTTPUtils.getCookies(request.getContent().getHeaders());
+				String sessionId = GlueListener.getSessionId(cookies);
+				if (sessionId != null) {
+					if (provider != null) {
+						session = provider.getSession(sessionId);
+					}
 				}
 			}
 		}
@@ -595,7 +610,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (executor instanceof AssignmentExecutor && !((AssignmentExecutor) executor).isOverwriteIfExists()) {
 				String variableName = ((AssignmentExecutor) executor).getVariableName();
 				if (variableName != null && input.get(variableName) == null) {
-					input.put(variableName, getValue(request, (AssignmentExecutor) executor, session, queryParameters, formParameters, cookieParameters, pathParameters));
+					input.put(variableName, getValue(repository, charset, request, (AssignmentExecutor) executor, session, queryParameters, formParameters, cookieParameters, pathParameters));
 				}
 			}
 			if (executor instanceof ExecutorGroup) {
@@ -606,7 +621,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	}
 
 	@SuppressWarnings("rawtypes")
-	public Object getValue(HTTPRequest request, AssignmentExecutor executor, Session session, Map<String, List<String>> queryParameters, Map formParameters, Map<String, List<String>> cookieParameters, Map<String, String> pathParameters) throws IOException {
+	public static Object getValue(ScriptRepository repository, Charset charset, HTTPEntity entity, AssignmentExecutor executor, Session session, Map<String, List<String>> queryParameters, Map formParameters, Map<String, List<String>> cookieParameters, Map<String, String> pathParameters) throws IOException {
 		String optionalType = executor.getOptionalType();
 		String variableName = ((AssignmentExecutor) executor).getVariableName();
 		Object value = null;
@@ -617,29 +632,32 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				string = variableName;
 			}
 			if ("contentType".equals(string)) {
-				value = MimeUtils.getContentType(request.getContent().getHeaders());
+				value = MimeUtils.getContentType(entity.getContent().getHeaders());
 			}
 			else if ("contentLength".equals(string)) {
-				value = MimeUtils.getContentLength(request.getContent().getHeaders());
+				value = MimeUtils.getContentLength(entity.getContent().getHeaders());
 			}
 			else if ("charset".equals(string)) {
-				value = MimeUtils.getCharset(request.getContent().getHeaders());
+				value = MimeUtils.getCharset(entity.getContent().getHeaders());
 			}
 			else if ("contentRange".equals(string)) {
-				value = MimeUtils.getContentRange(request.getContent().getHeaders());
+				value = MimeUtils.getContentRange(entity.getContent().getHeaders());
 			}
 			else if ("name".equals(string)) {
-				value = MimeUtils.getName(request.getContent().getHeaders());
+				value = MimeUtils.getName(entity.getContent().getHeaders());
 			}
 			else if ("method".equals(string)) {
-				value = request.getMethod(); 
+				value = RequestMethods.method(); 
 			}
 			else if ("target".equals(string)) {
-				value = request.getTarget(); 
+				value = RequestMethods.target(); 
+			}
+			else if ("code".equals(string)) {
+				value = ScriptRuntime.getRuntime().getContext().get(ResponseMethods.RESPONSE_CODE);
 			}
 			else if ("url".equals(string)) {
 				try {
-					value = HTTPUtils.getURI(request, false);
+					value = RequestMethods.url(); 
 				}
 				catch (FormatException e) {
 					// do nothing
@@ -650,7 +668,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 		}
 		else if (executor.getContext().getAnnotations().containsKey("content")) {
-			if (request.getContent() instanceof ContentPart) {
+			if (entity.getContent() instanceof ContentPart) {
 				// unmarshal the content
 				if (optionalType != null) {
 					ComplexType type = null;
@@ -672,13 +690,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					if (type == null) {
 						throw new IllegalArgumentException("Can not resolve complex type: " + optionalType);
 					}
-					String contentType = MimeUtils.getContentType(request.getContent().getHeaders());
-					String charset = MimeUtils.getCharset(request.getContent().getHeaders());
+					String contentType = MimeUtils.getContentType(entity.getContent().getHeaders());
+					String charsetName = MimeUtils.getCharset(entity.getContent().getHeaders());
 					UnmarshallableBinding binding = MediaType.APPLICATION_JSON.equals(contentType)
-						? new JSONBinding(type, charset == null ? this.charset : Charset.forName(charset))
-						: new XMLBinding(type, charset == null ? this.charset : Charset.forName(charset));
+						? new JSONBinding(type, charset == null ? charset : Charset.forName(charsetName))
+						: new XMLBinding(type, charset == null ? charset : Charset.forName(charsetName));
 					try {
-						value = binding.unmarshal(IOUtils.toInputStream(((ContentPart) request.getContent()).getReadable()), new Window[0]);
+						value = binding.unmarshal(IOUtils.toInputStream(((ContentPart) entity.getContent()).getReadable()), new Window[0]);
 					}
 					catch (ParseException e) {
 						logger.error("Could not parse request data", e);
@@ -687,7 +705,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				}
 				// just set the stream
 				else {
-					value = IOUtils.toInputStream(((ContentPart) request.getContent()).getReadable());
+					value = IOUtils.toInputStream(((ContentPart) entity.getContent()).getReadable());
 				}
 			}
 		}
@@ -700,7 +718,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (!name.contains("-")) {
 				name = name.substring(0, 1) + name.substring(1).replaceAll("([A-Z])", "-$1");
 			}
-			value = request.getContent() == null ? null : MimeUtils.getHeader(name, request.getContent().getHeaders());
+			value = entity.getContent() == null ? null : MimeUtils.getHeader(name, entity.getContent().getHeaders());
 			if (value != null && preparseHeaders && name.equalsIgnoreCase("If-Modified-Since")) {
 				try {
 					value = HTTPUtils.parseDate((String) value);
@@ -750,7 +768,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						// default types will be autoconverted (or at least tried) from string
 						else if (DefaultOptionalTypeProvider.wrapDefault(optionalType) != null) {
 							String reportedCharset = MimeUtils.getCharset(((ContentPart) value).getHeaders());
-							Charset charset = reportedCharset == null ? Charset.defaultCharset() : Charset.forName(reportedCharset);
+							charset = reportedCharset == null ? Charset.defaultCharset() : Charset.forName(reportedCharset);
 							value = IOUtils.toString(IOUtils.wrapReadable(readable, charset));
 						}
 						// just put the bytes there
@@ -799,7 +817,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				if (headerName.startsWith("-")) {
 					headerName = headerName.substring(1);
 				}
-				Header header = MimeUtils.getHeader(headerName, request.getContent().getHeaders());
+				Header header = MimeUtils.getHeader(headerName, entity.getContent().getHeaders());
 				if (header != null) {
 					value = header.getValue();
 				}
