@@ -69,8 +69,8 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 			String path = URIUtils.normalize(uri.getPath()).replaceFirst("^[/]+", "");
 			Script preprocessScript = null;
 			// we search for a preprocess script on the path somewhere
-			while (path.contains("/")) {
-				path = path.replaceAll("/[^/]+$", "");
+			while (path.contains("/") && !path.isEmpty()) {
+				path = path.replaceAll("/[^/]*$", "");
 				if (path.contains(".")) {
 					return null;
 				}
