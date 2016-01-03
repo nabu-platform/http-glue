@@ -15,6 +15,7 @@ import be.nabu.glue.api.ExecutionEnvironment;
 import be.nabu.glue.api.Script;
 import be.nabu.glue.api.ScriptRepository;
 import be.nabu.glue.impl.SimpleExecutionContext;
+import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.authentication.api.TokenValidator;
 import be.nabu.libs.events.api.EventHandler;
@@ -35,6 +36,7 @@ import be.nabu.libs.resources.URIUtils;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.mime.api.Header;
 import be.nabu.utils.mime.api.ModifiablePart;
+import be.nabu.utils.mime.impl.MimeHeader;
 import be.nabu.utils.mime.impl.PlainMimeContentPart;
 import be.nabu.utils.mime.impl.PlainMimeEmptyPart;
 
@@ -49,8 +51,10 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 	private String serverPath;
 	private String preferredResponseType;
 	private Charset charset = Charset.defaultCharset();
+	private Authenticator authenticator;
 
-	public GluePreprocessListener(SessionProvider sessionProvider, ScriptRepository repository, ExecutionEnvironment environment, String serverPath) {
+	public GluePreprocessListener(Authenticator authenticator, SessionProvider sessionProvider, ScriptRepository repository, ExecutionEnvironment environment, String serverPath) {
+		this.authenticator = authenticator;
 		this.repository = repository;
 		this.environment = environment;
 		this.sessionProvider = sessionProvider;
@@ -132,7 +136,7 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 			runtime.getContext().put(RequestMethods.POST, new HashMap<String, List<String>>());
 			runtime.getContext().put(RequestMethods.COOKIES, cookies);
 			runtime.getContext().put(RequestMethods.PATH, new HashMap<String, List<String>>());
-			runtime.getContext().put(UserMethods.AUTHENTICATOR, null);
+			runtime.getContext().put(UserMethods.AUTHENTICATOR, authenticator);
 			runtime.getContext().put(UserMethods.ROLE_HANDLER, null);
 			runtime.getContext().put(UserMethods.PERMISSION_HANDLER, null);
 			runtime.getContext().put(UserMethods.SSL_ONLY_SECRET, true);
@@ -172,6 +176,11 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 				// but rewrite the headers
 				for (Header header : part.getHeaders()) {
 					part.removeHeader(header.getName());
+				}
+				Session newSession = (Session) runtime.getContext().get(SessionMethods.SESSION);
+				// if we have a session but it is not in the request, add it
+				if (newSession != null && (originalSessionId == null || !originalSessionId.equals(newSession.getId()))) {
+					part.setHeader(new MimeHeader("Cookie", GlueListener.SESSION_COOKIE + "=" + newSession.getId()));
 				}
 				part.setHeader(headers.toArray(new Header[headers.size()]));
 			}
