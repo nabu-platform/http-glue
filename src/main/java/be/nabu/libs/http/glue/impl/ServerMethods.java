@@ -14,7 +14,9 @@ public class ServerMethods {
 	public static final String ROOT_PATH = "rootPath";
 	
 	public static String root() {
-		return (String) ScriptRuntime.getRuntime().getContext().get(ROOT_PATH);
+		String string = (String) ScriptRuntime.getRuntime().getContext().get(ROOT_PATH);
+		// strip trailing
+		return string == null ? "" : string.replaceFirst("[/]$", "");
 	}
 	
 	public static void fail(String message, Integer code) {
