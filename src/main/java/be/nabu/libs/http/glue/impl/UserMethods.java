@@ -172,12 +172,12 @@ public class UserMethods {
 	}
 	
 	@GlueMethod(description = "Checks if a user has certain roles")
-	public static boolean hasRoles(@GlueParam(name = "roles", description = "The roles you want to check") String...roles) {
+	public static boolean hasRole(@GlueParam(name = "roles", description = "The roles you want to check") String role) {
 		String realm = realm();
 		Token token = (Token) SessionMethods.get(GlueListener.buildTokenName(realm));
 		RoleHandler handler = (RoleHandler) ScriptRuntime.getRuntime().getContext().get(ROLE_HANDLER);
 		// the token can be null, in that case the role handler is supposed to check for anonymous access
-		return handler != null && handler.hasRole(token, roles);
+		return handler != null && handler.hasRole(token, role);
 	}
 	
 	@GlueMethod(description = "Checks if a user has permission to do something")

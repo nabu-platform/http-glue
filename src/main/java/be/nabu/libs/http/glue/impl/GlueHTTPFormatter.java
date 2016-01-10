@@ -65,7 +65,6 @@ public class GlueHTTPFormatter extends SimpleOutputFormatter {
 		if (annotations == null) {
 			return true;
 		}
-		String realm = annotations.get("realm");
 		String role = annotations.get("role");
 		if (role == null || role.trim().isEmpty()) {
 			String permission = annotations.get("permission");
@@ -81,7 +80,7 @@ public class GlueHTTPFormatter extends SimpleOutputFormatter {
 		}
 		else {
 			for (String roleToCheck : role.split("[\\s,]+")) {
-				if (UserMethods.hasRoles(realm == null || realm.trim().isEmpty() ? null : realm, roleToCheck)) {
+				if (UserMethods.hasRole(roleToCheck)) {
 					return true;
 				}
 			}
