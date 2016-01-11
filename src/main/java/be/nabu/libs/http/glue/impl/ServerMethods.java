@@ -15,8 +15,8 @@ public class ServerMethods {
 	
 	public static String root() {
 		String string = (String) ScriptRuntime.getRuntime().getContext().get(ROOT_PATH);
-		// strip trailing
-		return string == null ? "" : string.replaceFirst("[/]$", "");
+		// make sure there is one trailing slash
+		return string == null ? "/" : string.replaceFirst("[/]$", "") + "/";
 	}
 	
 	public static void fail(String message, Integer code) {
