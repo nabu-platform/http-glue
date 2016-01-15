@@ -31,6 +31,7 @@ import be.nabu.glue.api.GroupedScriptRepository;
 import be.nabu.glue.api.OutputFormatter;
 import be.nabu.glue.api.Script;
 import be.nabu.glue.api.ScriptRepository;
+import be.nabu.glue.api.StringSubstituterProvider;
 import be.nabu.glue.impl.DefaultOptionalTypeProvider;
 import be.nabu.glue.impl.SimpleExecutionContext;
 import be.nabu.glue.impl.SimpleExecutionEnvironment;
@@ -167,6 +168,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	 * Caches the analysis of a path to speed things up
 	 */
 	private Map<String, PathAnalysis> pathAnalysis = new HashMap<String, PathAnalysis>();
+	
+	private List<StringSubstituterProvider> substituterProviders = new ArrayList<StringSubstituterProvider>();
 	
 	public static GlueListener build(SessionProvider sessionProvider, String serverPath, String...arguments) throws IOException, URISyntaxException {
 		return new GlueListener(
@@ -355,6 +358,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			executionContext.setOutputCurrentLine(false);
 			executionContext.setPrincipal(token);
 			ScriptRuntime runtime = new ScriptRuntime(script, executionContext, input);
+			runtime.addSubstituterProviders(substituterProviders);
 			
 			// set the context
 			runtime.getContext().put(ServerMethods.ROOT_PATH, serverPath);
@@ -1024,5 +1028,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public void setAlwaysCreateSession(boolean alwaysCreateSession) {
 		this.alwaysCreateSession = alwaysCreateSession;
+	}
+
+	public List<StringSubstituterProvider> getSubstituterProviders() {
+		return substituterProviders;
 	}
 }
