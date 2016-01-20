@@ -1,6 +1,7 @@
 package be.nabu.libs.http.glue.impl;
 
 import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 
 import be.nabu.glue.ScriptRuntime;
@@ -15,7 +16,13 @@ import be.nabu.libs.authentication.api.TokenWithSecret;
 import be.nabu.libs.authentication.api.principals.BasicPrincipal;
 import be.nabu.libs.authentication.api.principals.SharedSecretPrincipal;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
+import be.nabu.libs.http.HTTPException;
+import be.nabu.libs.http.api.HTTPEntity;
+import be.nabu.libs.http.core.ServerHeader;
 import be.nabu.libs.http.glue.GlueListener;
+import be.nabu.libs.metrics.api.MetricInstance;
+import be.nabu.utils.mime.api.Header;
+import be.nabu.utils.mime.impl.MimeUtils;
 
 @MethodProviderClass(namespace = "user")
 public class UserMethods {
@@ -69,9 +76,42 @@ public class UserMethods {
 	public static final String PERMISSION_HANDLER = "permissionHandler";
 	public static final String TOKEN = "token";
 	public static final String REALM = "realm";
+	public static final String LOGIN_BLACKLIST = "loginBlacklist";
+	public static final String METRICS_LOGIN_FAILED = "loginFailed";
+	public static final String METRICS_REMEMBER_FAILED = "rememberFailed";
+	
+	@SuppressWarnings("unchecked")
+	private static boolean isBlacklisted() {
+		String ip = getIp();
+		if (ip != null) {
+			Map<String, Date> blacklist = (Map<String, Date>) ScriptRuntime.getRuntime().getContext().get(LOGIN_BLACKLIST);
+			Date date = blacklist.get(ip);
+			if (date != null && date.before(new Date())) {
+				synchronized(blacklist) {
+					blacklist.remove(ip);
+				}
+			}
+			else if (date != null) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static String getIp() {
+		HTTPEntity content = RequestMethods.content();
+		if (content.getContent() != null) {
+			Header header = MimeUtils.getHeader(ServerHeader.REMOTE_ADDRESS.getName(), content.getContent().getHeaders());
+			return header == null ? null : header.getValue();
+		}
+		return null;
+	}
 	
 	@GlueMethod(description = "Tries to remember the user based on a shared secret")
 	public static boolean remember() {
+		if (isBlacklisted()) {
+			throw new HTTPException(429);
+		}
 		String realm = realm();
 		String cookie = RequestMethods.cookie("Realm-" + realm);
 		if (cookie != null) {
@@ -86,6 +126,13 @@ public class UserMethods {
 						SessionMethods.create(true);
 						SessionMethods.set(GlueListener.buildTokenName(realm), token);
 						return true;
+					}
+					else {
+						forget();
+						MetricInstance metrics = ServerMethods.metrics();
+						if (metrics != null) {
+							metrics.increment(METRICS_REMEMBER_FAILED + ":" + getIp(), 1);
+						}
 					}
 				}
 			}
@@ -131,7 +178,9 @@ public class UserMethods {
 			@GlueParam(name = "name", description = "The user name") final String name, 
 			@GlueParam(name = "password", description = "The user password") final String password,
 			@GlueParam(name = "remember", description = "Whether or not to remember this login", defaultValue = "true") final Boolean remember) {
-		
+		if (isBlacklisted()) {
+			throw new HTTPException(429);
+		}
 		String realm = realm();
 		Authenticator authenticator = (Authenticator) ScriptRuntime.getRuntime().getContext().get(AUTHENTICATOR);
 		if (authenticator != null) {
@@ -158,6 +207,12 @@ public class UserMethods {
 				SessionMethods.create(true);
 				SessionMethods.set(GlueListener.buildTokenName(realm), token);
 				return true;
+			}
+			else {
+				MetricInstance metrics = ServerMethods.metrics();
+				if (metrics != null) {
+					metrics.increment(METRICS_LOGIN_FAILED + ":" + getIp(), 1);
+				}
 			}
 		}
 		return false;

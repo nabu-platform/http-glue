@@ -8,6 +8,7 @@ import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +64,7 @@ import be.nabu.libs.http.glue.impl.ResponseMethods;
 import be.nabu.libs.http.glue.impl.ServerMethods;
 import be.nabu.libs.http.glue.impl.SessionMethods;
 import be.nabu.libs.http.glue.impl.UserMethods;
+import be.nabu.libs.metrics.api.MetricInstance;
 import be.nabu.libs.resources.URIUtils;
 import be.nabu.libs.types.DefinedTypeResolverFactory;
 import be.nabu.libs.types.api.ComplexType;
@@ -89,7 +91,6 @@ import be.nabu.utils.mime.impl.PlainMimeEmptyPart;
 /**
  * Important: the csrf protection only works if the user has a session as the token is stored in there.
  * 
- * 
  * TODO: XML/JSON incoming support!!
  * TODO: how to limit sizes of file uploads?
  * TODO: bind sessions to remote host for additional safety? 
@@ -107,6 +108,7 @@ import be.nabu.utils.mime.impl.PlainMimeEmptyPart;
  */
 public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
+	private MetricInstance metrics;
 	public static final String PUBLIC = "public";
 	private static final String CSRF_TOKEN = "csrfToken";
 	private ScriptRepository repository;
@@ -163,6 +165,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private boolean requireFullName = true;
 	
 	private String filePath;
+	
+	private Map<String, Date> loginBlacklist = new HashMap<String, Date>();
 	
 	/**
 	 * Caches the analysis of a path to speed things up
@@ -375,6 +379,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			runtime.getContext().put(SessionMethods.SESSION_PROVIDER, sessionProvider);
 			runtime.getContext().put(ResponseMethods.RESPONSE_PREFERRED_TYPE, preferredContentType);
 			runtime.getContext().put(SessionMethods.SESSION, session);
+			runtime.getContext().put(UserMethods.LOGIN_BLACKLIST, loginBlacklist);
+			runtime.getContext().put(ServerMethods.METRICS, metrics);
+			
 			if (filePath != null) {
 				runtime.getContext().put(SystemMethodProvider.CLI_DIRECTORY, filePath);
 			}
@@ -1032,5 +1039,16 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public List<StringSubstituterProvider> getSubstituterProviders() {
 		return substituterProviders;
+	}
+	
+	public void blacklistLogin(String ip, Date until) {
+		synchronized(loginBlacklist) {
+			if (until == null || until.before(new Date())) {
+				loginBlacklist.remove(ip);
+			}
+			else {
+				loginBlacklist.put(ip, until);
+			}
+		}
 	}
 }

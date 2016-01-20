@@ -7,11 +7,17 @@ import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.ScriptUtils;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.HTTPException;
+import be.nabu.libs.metrics.api.MetricInstance;
 
 @MethodProviderClass(namespace = "server")
 public class ServerMethods {
 
 	public static final String ROOT_PATH = "rootPath";
+	public static final String METRICS = "metrics";
+	
+	public static MetricInstance metrics() {
+		return (MetricInstance) ScriptRuntime.getRuntime().getContext().get(METRICS);
+	}
 	
 	public static String root() {
 		String string = (String) ScriptRuntime.getRuntime().getContext().get(ROOT_PATH);
