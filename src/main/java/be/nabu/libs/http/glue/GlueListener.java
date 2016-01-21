@@ -1051,4 +1051,12 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 		}
 	}
+
+	public MetricInstance getMetrics() {
+		return metrics;
+	}
+
+	public void setMetrics(MetricInstance metrics) {
+		this.metrics = metrics;
+	}
 }

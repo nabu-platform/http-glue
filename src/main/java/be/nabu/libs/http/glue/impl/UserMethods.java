@@ -79,6 +79,7 @@ public class UserMethods {
 	public static final String LOGIN_BLACKLIST = "loginBlacklist";
 	public static final String METRICS_LOGIN_FAILED = "loginFailed";
 	public static final String METRICS_REMEMBER_FAILED = "rememberFailed";
+	public static final String METRICS_USERNAME_FAILED = "usernameFailed";
 	
 	@SuppressWarnings("unchecked")
 	private static boolean isBlacklisted() {
@@ -211,7 +212,10 @@ public class UserMethods {
 			else {
 				MetricInstance metrics = ServerMethods.metrics();
 				if (metrics != null) {
-					metrics.increment(METRICS_LOGIN_FAILED + ":" + getIp(), 1);
+					// this allows you to track multiple failed logins from a single ip for a single or multiple user names (non-distributed brute-force attack)
+					metrics.increment(METRICS_LOGIN_FAILED + ":" + getIp() + ":" + name, 1);
+					// this allows you to tracker multiple failed logins from multiple ips for a single user name (distributed brute-force attack attack)
+					metrics.increment(METRICS_USERNAME_FAILED + ":" + name + ":" + getIp(), 1);
 				}
 			}
 		}
