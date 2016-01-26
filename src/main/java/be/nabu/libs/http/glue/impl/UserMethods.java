@@ -86,14 +86,16 @@ public class UserMethods {
 		String ip = getIp();
 		if (ip != null) {
 			Map<String, Date> blacklist = (Map<String, Date>) ScriptRuntime.getRuntime().getContext().get(LOGIN_BLACKLIST);
-			Date date = blacklist.get(ip);
-			if (date != null && date.before(new Date())) {
-				synchronized(blacklist) {
-					blacklist.remove(ip);
+			if (blacklist != null) {
+				Date date = blacklist.get(ip);
+				if (date != null && date.before(new Date())) {
+					synchronized(blacklist) {
+						blacklist.remove(ip);
+					}
 				}
-			}
-			else if (date != null) {
-				return true;
+				else if (date != null) {
+					return true;
+				}
 			}
 		}
 		return false;

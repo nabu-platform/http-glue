@@ -66,9 +66,13 @@ import be.nabu.libs.http.glue.impl.SessionMethods;
 import be.nabu.libs.http.glue.impl.UserMethods;
 import be.nabu.libs.metrics.api.MetricInstance;
 import be.nabu.libs.resources.URIUtils;
+import be.nabu.libs.types.ComplexContentWrapperFactory;
 import be.nabu.libs.types.DefinedTypeResolverFactory;
+import be.nabu.libs.types.TypeUtils;
+import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
+import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.binding.api.UnmarshallableBinding;
 import be.nabu.libs.types.binding.api.Window;
 import be.nabu.libs.types.binding.json.JSONBinding;
@@ -687,7 +691,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						try {
 							Script script = repository.getScript(optionalType);
 							if (script != null) {
-								type = GlueTypeUtils.toType(ScriptUtils.getInputs(script), new MapTypeGenerator());
+								type = GlueTypeUtils.toType(ScriptUtils.getFullName(script), ScriptUtils.getInputs(script), new MapTypeGenerator(), repository);
 							}
 						}
 						catch (ParseException e) {
@@ -835,6 +839,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					value = header.getValue();
 				}
 			}
+		}
+		if (executor.getContext().getAnnotations().containsKey("sanitize")) {
+			value = sanitize(value);
 		}
 		return value;
 	}
@@ -1058,5 +1065,28 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public void setMetrics(MetricInstance metrics) {
 		this.metrics = metrics;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public static Object sanitize(Object value) {
+		if (value instanceof String) {
+			return sanitizeHTML((String) value);
+		}
+		else {
+			ComplexContent content = value instanceof ComplexContent ? (ComplexContent) value :	ComplexContentWrapperFactory.getInstance().getWrapper().wrap(value);
+			if (content != null) {
+				for (Element<?> child : TypeUtils.getAllChildren(content.getType())) {
+					Object object = content.get(child.getName());
+					if (object != null) {
+						content.set(child.getName(), sanitize(object));
+					}
+				}
+			}
+			return content == null ? value : content;
+		}
+	}
+	
+	private static String sanitizeHTML(String value) {
+		return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
 }
