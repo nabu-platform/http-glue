@@ -37,6 +37,7 @@ import be.nabu.glue.impl.DefaultOptionalTypeProvider;
 import be.nabu.glue.impl.SimpleExecutionContext;
 import be.nabu.glue.impl.SimpleExecutionEnvironment;
 import be.nabu.glue.impl.formatters.SimpleOutputFormatter;
+import be.nabu.glue.impl.formatters.ValidatingOutputFormatter;
 import be.nabu.glue.impl.methods.ScriptMethods;
 import be.nabu.glue.impl.providers.SystemMethodProvider;
 import be.nabu.glue.types.GlueTypeUtils;
@@ -393,6 +394,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// run the script
 			StringWriter writer = new StringWriter();
 			OutputFormatter buffer = scanBefore ? new SimpleOutputFormatter(writer, false) : new GlueHTTPFormatter(repository, charset, writer);
+			// wrap validation around it
+			buffer = new ValidatingOutputFormatter(buffer);
 			runtime.setFormatter(buffer);
 			runtime.getContext().put(ResponseMethods.RESPONSE_DEFAULT_CHARSET, charset);
 			runtime.run();
