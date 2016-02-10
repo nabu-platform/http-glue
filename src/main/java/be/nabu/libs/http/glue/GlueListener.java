@@ -846,6 +846,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		if (executor.getContext().getAnnotations().containsKey("sanitize")) {
 			value = sanitize(value);
 		}
+		// make sure empty values register as null
+		if (value instanceof String && ((String) value).trim().isEmpty()) {
+			value = null;
+		}
 		return value;
 	}
 	
