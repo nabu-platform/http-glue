@@ -64,6 +64,29 @@ content = json.objectify(theBytes)
 Note that data is only injected right before the line is executed so data for lines that are not executed (due to conditional circumstances) is never injected.
 These annotations have method equivalents if you want more control.
 
+## Validation
+
+You can add validation to any variable assignment, including user input. These are the possible validations:
+
+- **@pattern**: you can add a regex pattern that the variable should match, there are a few predefined patterns you can use, e.g. **@pattern word** will check that it matches "[\w]+", **whitespace** checks for any whitespace and **number** checks for valid integer or decimal numbers
+- **@enumeration**: you can check that a value belongs to a given enumeration. The enumeration can be given in a comma-separated fashion, e.g. **@enumeration a, b, c** will check that the value is either "a", "b" or "c" (the values are auto-trimmed). Note that there are also a few predefined enumerations:
+	- **language** will check that it is a valid ISO language code
+	- **country** will check that it is a valid ISO country code
+	- **timezone**: will check that it is a valid timezone
+	- **charset**: will check that it is a valid charset
+- **@null**: depending on the (optional) boolean (default true) it will check that the value _is_ null (if true) or not null (if false), so **@null false** will check that the value is not null
+- **@max**: for numbers it will check that the number is not bigger than the given max value, for strings it will check that the string is not longer than the given amount. You can use the optional typing system to make sure the variable is of the correct type for the matching, e.g. this will check that the query parameter is not null, an integer and not larger than 10:
+
+```python
+@get
+@max 10
+@null false
+integer myValue ?= null 
+```  
+
+- **@min**: sets a minimum for numbers or a minimum length for strings
+
+
 # Response Data
 
 There are two ways to set the response data:
