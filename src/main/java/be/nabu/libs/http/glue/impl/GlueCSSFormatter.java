@@ -170,12 +170,15 @@ public class GlueCSSFormatter implements OutputFormatter {
 				String [] states = executor.getContext().getAnnotations().get("state").trim().toLowerCase().split("[\\s]*,[\\s]*");
 				for (int i = 0; i < states.length; i++) {
 					// a state can have functions like lang(en)
-					String baseState = states[i].replaceAll("^([\\w]+).*", "$1");
+					String baseState = states[i].replaceAll("^([\\w-]+).*", "$1");
 					if (singleQuoteStates.contains(baseState)) {
 						states[i] = ":" + states[i];
 					}
 					else if (doubleQuoteStates.contains(baseState)) {
 						states[i] = "::" + states[i];
+					}
+					else {
+						throw new IllegalArgumentException("Unknown state: " + baseState);
 					}
 				}
 				newState = new ArrayList<String>(Arrays.asList(states));
