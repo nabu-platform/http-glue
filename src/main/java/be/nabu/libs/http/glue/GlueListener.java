@@ -59,6 +59,7 @@ import be.nabu.libs.http.api.server.Session;
 import be.nabu.libs.http.api.server.SessionProvider;
 import be.nabu.libs.http.core.DefaultHTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
+import be.nabu.libs.http.glue.impl.GlueCSSFormatter;
 import be.nabu.libs.http.glue.impl.GlueHTTPFormatter;
 import be.nabu.libs.http.glue.impl.RequestMethods;
 import be.nabu.libs.http.glue.impl.ResponseMethods;
@@ -272,14 +273,14 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					}
 				}
 			}
-			if (script == null) {
+			if (script == null || script.getRoot() == null) {
 				return null;
 			}
 			// the script is matched on single name
 			if (requireFullName && !ScriptUtils.getFullName(script).equals(scriptPath)) {
 				return null;
 			}
-			boolean isPublicScript = script.getRoot().getContext().getAnnotations().containsKey("page")
+			boolean isPublicScript = (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("page"))
 					|| script.getRepository() instanceof GroupedScriptRepository && PUBLIC.equals(((GroupedScriptRepository) script.getRepository()).getGroup());
 			if (!isPublicScript) {
 				return null;
@@ -362,7 +363,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			Map<String, List<String>> queryProperties = URIUtils.getQueryProperties(uri);
 			
-			List<Header> headersToAdd = scanBefore ? scan(request, queryProperties, formParameters, cookies, input, pathParameters, script.getRoot()) : null;
+			List<Header> headersToAdd = scanBefore ? scan(request, queryProperties, formParameters, cookies, input, pathParameters, script.getRoot()) : new ArrayList<Header>();
 			SimpleExecutionContext executionContext = new SimpleExecutionContext(environment, null, "true".equals(environment.getParameters().get("debug")));
 			executionContext.setOutputCurrentLine(false);
 			executionContext.setPrincipal(token);
@@ -394,6 +395,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// run the script
 			StringWriter writer = new StringWriter();
 			OutputFormatter buffer = scanBefore ? new SimpleOutputFormatter(writer, false) : new GlueHTTPFormatter(repository, charset, writer);
+			// if we have a @css annotation at the root, set the css formatter
+			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("css")) {
+				buffer = new GlueCSSFormatter(buffer);
+				headersToAdd.add(new MimeHeader("Content-Type", "text/css"));
+			}
 			// wrap validation around it
 			buffer = new ValidatingOutputFormatter(buffer);
 			runtime.setFormatter(buffer);
@@ -411,9 +417,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (headers == null) {
 				headers = new ArrayList<Header>();
 			}
-			if (headersToAdd != null) {
-				headers.addAll(headersToAdd);
-			}
+			headers.addAll(headersToAdd);
 			session = getSession(sessionProvider, runtime); 
 			// set a cookie for the session if it's a new session
 			if (session != null && !session.getId().equals(originalSessionId)) {

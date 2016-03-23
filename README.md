@@ -293,3 +293,91 @@ if (code == 404 && target != null && target != "/404.html")
 ```
 
 Note that the null check is used to make sure we actually have the original request target. Some rogue component could be generating responses without the original request attached.
+
+# CSS Generation
+
+A lot of people use css preprocessing to generate css using methodologies that css itself does not support. Sass is a good example of an extension on top of CSS that allows for more complex stuff like variables, mixins,...
+
+While using sass is always still an option, this package ships with an alternative css "preprocessor" based on glue. It is not really a preprocessor as much as it is simply a script that -when run- outputs valid css.
+
+You of course have access to all the niceties of glue in a webcontext:
+
+- variables
+- lambda's
+- contextual access (get, post, session, cookies,...)
+- ...
+
+But it also offers some features to rival sass functionality, especially with regards to nesting.
+
+**Important**: to activate the css preprocessor, you **have** to set the css annotation at the script level, for example:
+
+```python
+@css
+
+@element div
+sequence
+	padding("10px", top: "20px")
+```
+
+These are the annotations that are supported for the css preprocessing:
+
+- **@css**: necessary at the script level to indicate that this is a css stylesheet. This will activate the css preprocessor and make sure the content type is set correctly
+- **@class**: allows you to target a class e.g. `@class myClass`
+- **@element**: allows you to target an element e.g. `@element div`
+- **@id**: allows you to target an id e.g. `@id myId`
+- **@attribute**: allows you to target an attribute e.g. `@attribute title=test`
+- **@state**: allows you to target a state (first-child, hover,...), e.g. `@state first-child`
+- **@select**: allows you to write full css e.g. `@select .myClass`
+- **@relation**: the default relation is descendant (e.g. `.myClass .myDescendantClass`) but you can also set:
+	- **child**: e.g. `.myClass > .myChildClass`
+	- **sibling**: e.g. `.myClass ~ .mySiblingClass`
+	- **adjacent**: e.g. `.myClass + .myAdjacentClass`
+	- **self**: this allows you to build upon a single identifier, for example:
+	
+```python
+@element div
+sequence
+	padding("10px", top: "20px")
+	@class special
+	@relation self
+	sequence
+		margin("10px")
+```
+
+Generates:
+
+```css
+div {
+	padding: 10px;
+	padding-top: 20px;
+}
+	
+div.special {
+	margin: 10px;
+}
+```
+
+The code will generate cross products when needed:
+
+```python
+@element div, span
+sequence
+	padding("10px", top: "20px")
+	@class test, test2
+	@relation self
+	sequence
+		margin("10px")
+```
+
+Will generate:
+
+```css
+div, span {
+	padding: 10px;
+	padding-top: 20px;
+}
+	
+div.test, div.test2, span.test, span.test2 {
+	margin: 10px;
+}
+```
