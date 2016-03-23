@@ -1096,4 +1096,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private static String sanitizeHTML(String value) {
 		return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
+
+	public ExecutionEnvironment getEnvironment() {
+		return environment;
+	}
+	
 }
