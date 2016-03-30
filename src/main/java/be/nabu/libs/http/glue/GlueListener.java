@@ -216,7 +216,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 		}
 		try {
-			URI uri = HTTPUtils.getURI(request, false);
+			boolean secure = "true".equals(environment.getParameters().get("secure"));
+			URI uri = HTTPUtils.getURI(request, secure);
 			String path = URIUtils.normalize(uri.getPath());
 			// not sure if we want to keep this but it may trigger odd things as the '/' is replaced with a '.' for script lookup
 			if (path.contains(".")) {
@@ -329,11 +330,12 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				}
 			}
 
+			boolean noCsrf = (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("nocsrf"));
 			Map<String, Object> input = new HashMap<String, Object>();
 			// scan all inputs, check for annotations to indicate what you might want
 			@SuppressWarnings("rawtypes")
 			Map formParameters = null;
-			if (request.getContent() instanceof ParsedMimeFormPart) {
+			if (request.getContent() instanceof ParsedMimeFormPart && !noCsrf) {
 				formParameters = ((ParsedMimeFormPart) request.getContent()).getValues();
 				if (formParameters != null && addCsrfCheck) {
 					if (originalSessionId == null) {
@@ -371,6 +373,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			runtime.addSubstituterProviders(substituterProviders);
 			
 			// set the context
+			runtime.getContext().put(RequestMethods.URL, uri);
 			runtime.getContext().put(ServerMethods.ROOT_PATH, serverPath);
 			runtime.getContext().put(RequestMethods.ENTITY, request);
 			runtime.getContext().put(RequestMethods.GET, queryProperties);
@@ -678,7 +681,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			else if ("url".equals(string)) {
 				try {
-					value = RequestMethods.url(); 
+					value = RequestMethods.url(null); 
 				}
 				catch (FormatException e) {
 					// do nothing

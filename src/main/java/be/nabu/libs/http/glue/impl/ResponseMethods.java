@@ -36,6 +36,7 @@ import be.nabu.utils.io.api.ByteBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
 import be.nabu.utils.mime.api.Header;
 import be.nabu.utils.mime.api.ModifiableHeader;
+import be.nabu.utils.mime.impl.FormatException;
 import be.nabu.utils.mime.impl.MimeHeader;
 import be.nabu.utils.mime.impl.MimeUtils;
 import be.nabu.utils.xml.XMLUtils;
@@ -231,9 +232,9 @@ public class ResponseMethods {
 		return charset;
 	}
 	
-	public static void redirect(String location, Boolean permanent) throws ParseException, IOException {
+	public static void redirect(String location, Boolean permanent) throws ParseException, IOException, FormatException {
 		ResponseMethods.code(permanent != null && permanent ? 301 : 307);
-		ResponseMethods.header("Location", location, true);
+		ResponseMethods.header("Location", RequestMethods.url(location).toString(), true);
 		ServerMethods.abort();
 	}
 	

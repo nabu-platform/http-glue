@@ -1,6 +1,7 @@
 package be.nabu.libs.http.glue.impl;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +19,7 @@ import be.nabu.utils.mime.impl.MimeUtils;
 @MethodProviderClass(namespace = "request")
 public class RequestMethods {
 	
+	public static final String URL = "url";
 	public static final String ENTITY = "entity";
 	public static final String GET = "requestGet";
 	public static final String POST = "requestPost";
@@ -72,15 +74,36 @@ public class RequestMethods {
 		return content().getVersion();
 	}
 	
-	public static URI url() throws FormatException {
-		HTTPRequest request = null;
-		if (content() instanceof HTTPRequest) {
-			request = (HTTPRequest) content();
+	/**
+	 * If you don't give any parameters, it will get the current URL
+	 * If you give it a path, it will build a new URL based on the current URL
+	 */
+	public static URI url(String path) throws FormatException {
+		URI uri = (URI) ScriptRuntime.getRuntime().getContext().get(URL);
+		if (uri == null) {
+			HTTPRequest request = null;
+			if (content() instanceof HTTPRequest) {
+				request = (HTTPRequest) content();
+			}
+			else if (content() instanceof LinkableHTTPResponse) {
+				request = ((LinkableHTTPResponse) content()).getRequest();
+			}
+			uri = request == null ? null : HTTPUtils.getURI(request, false);
 		}
-		else if (content() instanceof LinkableHTTPResponse) {
-			request = ((LinkableHTTPResponse) content()).getRequest();
+		if (path != null) {
+			if (!path.startsWith("/")) {
+				path = ServerMethods.root() + path;
+			}
+			try {
+				return new URI(uri.getScheme() + "://" + uri.getAuthority() + path);
+			}
+			catch (URISyntaxException e) {
+				throw new RuntimeException(e);
+			}
 		}
-		return request == null ? null : HTTPUtils.getURI(request, false);
+		else {
+			return uri;
+		}
 	}
 	
 	@SuppressWarnings("unchecked")
