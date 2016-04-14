@@ -281,8 +281,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (requireFullName && !ScriptUtils.getFullName(script).equals(scriptPath)) {
 				return null;
 			}
-			boolean isPublicScript = (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("page"))
-					|| script.getRepository() instanceof GroupedScriptRepository && PUBLIC.equals(((GroupedScriptRepository) script.getRepository()).getGroup());
+			boolean isPublicScript = isPublicScript(script);
 			if (!isPublicScript) {
 				return null;
 			}
@@ -551,6 +550,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		catch (Exception e) {
 			throw new HTTPException(500, e);	
 		}
+	}
+
+	public static boolean isPublicScript(Script script) throws IOException, ParseException {
+		return (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("page"))
+				|| script.getRepository() instanceof GroupedScriptRepository && PUBLIC.equals(((GroupedScriptRepository) script.getRepository()).getGroup());
 	}
 
 	public static String buildTokenName(String realm) {
