@@ -26,6 +26,9 @@ public class GlueTokenResolver implements TokenResolver {
 		Map<String, List<String>> cookies = HTTPUtils.getCookies(headers);
 		String originalSessionId = GlueListener.getSessionId(cookies);
 		Session session = originalSessionId != null && provider != null ? provider.getSession(originalSessionId) : null;
+		if (session == null) {
+			return null;
+		}
 		Token token = (Token) session.get(GlueListener.buildTokenName(realm));
 		if (token == null) {
 			AuthenticationHeader authenticationHeader = HTTPUtils.getAuthenticationHeader(headers);
