@@ -19,7 +19,7 @@ public class GlueHTTPFormatter extends SimpleOutputFormatter {
 	private Charset charset;
 
 	public GlueHTTPFormatter(ScriptRepository repository, Charset charset, Writer writer) {
-		super(writer, false);
+		super(writer, false, false);
 		this.repository = repository;
 		this.charset = charset;
 	}
