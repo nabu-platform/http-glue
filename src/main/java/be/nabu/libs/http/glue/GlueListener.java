@@ -569,7 +569,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		while (matcher.find()) {
 			pathParameters.add(matcher.group(1).replaceAll("[\\s]*:.*$", ""));
 		}
-		return new PathAnalysis(regex, pathParameters);
+		return new PathAnalysis("^" + regex, pathParameters);
 	}
 
 	public static Session getSession(SessionProvider provider, ScriptRuntime runtime) {
