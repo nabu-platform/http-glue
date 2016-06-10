@@ -399,6 +399,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			OutputFormatter buffer = scanBefore ? new SimpleOutputFormatter(writer, false) : new GlueHTTPFormatter(repository, charset, writer);
 			// if we have a @css annotation at the root, set the css formatter
 			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("css")) {
+				((SimpleOutputFormatter) buffer).setReplaceVariables(true);
 				buffer = new GlueCSSFormatter(buffer);
 				headersToAdd.add(new MimeHeader("Content-Type", "text/css"));
 			}
