@@ -184,9 +184,32 @@ public class UserMethods {
 		DeviceValidator deviceValidator = (DeviceValidator) ScriptRuntime.getRuntime().getContext().get(DEVICE_VALIDATOR);
 		if (token != null && deviceValidator != null) {
 			String deviceId = RequestMethods.cookie("device");
-			Header header = RequestMethods.header("User-Agent");
-			if (deviceValidator.isAllowed(token, deviceId, header == null ? null : header.getValue())) {
+			boolean isNewDevice = false;
+			Header remoteAddress = RequestMethods.header(ServerHeader.REMOTE_ADDRESS.getName());
+			if (deviceId == null) {
+				Header userAgent = RequestMethods.header("User-Agent");
+				deviceId = deviceValidator.newDeviceId(token, remoteAddress == null ? null : remoteAddress.getValue(), userAgent == null ? null : userAgent.getValue());
+				isNewDevice = true;
+			}
+			if (deviceValidator.isAllowed(token, remoteAddress == null ? null : remoteAddress.getValue(), deviceId)) {
 				return false;
+			}
+			// set a cookie to recognize device in the future
+			else if (isNewDevice) {
+				ResponseMethods.cookie(
+					"device", 
+					deviceId, 
+					// Set it to 100 years in the future
+					new Date(new Date().getTime() + 1000l*60*60*24*365*100),
+					// path
+					ServerMethods.root(), 
+					// domain
+					null, 
+					// secure
+					(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
+					// http only
+					true
+				);
 			}
 		}
 		return true;
