@@ -179,7 +179,7 @@ public class UserMethods {
 	}
 	
 	@GlueMethod(description = "Allows you to check if the current device is allowed for this account")
-	public static boolean deviceAllowed() {
+	public static boolean device() {
 		Token token = token();
 		DeviceValidator deviceValidator = (DeviceValidator) ScriptRuntime.getRuntime().getContext().get(DEVICE_VALIDATOR);
 		if (token != null && deviceValidator != null) {
@@ -191,11 +191,37 @@ public class UserMethods {
 				deviceId = deviceValidator.newDeviceId(token, remoteAddress == null ? null : remoteAddress.getValue(), userAgent == null ? null : userAgent.getValue());
 				isNewDevice = true;
 			}
-			if (deviceValidator.isAllowed(token, remoteAddress == null ? null : remoteAddress.getValue(), deviceId)) {
+			Boolean allowed = deviceValidator.isAllowed(token, remoteAddress == null ? null : remoteAddress.getValue(), deviceId);
+			// the id is unknown
+			if (allowed == null) {
+				Header userAgent = RequestMethods.header("User-Agent");
+				deviceId = deviceValidator.newDeviceId(token, remoteAddress == null ? null : remoteAddress.getValue(), userAgent == null ? null : userAgent.getValue());
+				isNewDevice = true;
+			}
+			allowed = deviceValidator.isAllowed(token, remoteAddress == null ? null : remoteAddress.getValue(), deviceId);
+			if (allowed == null) {
+				// unset the cookie
+				ResponseMethods.cookie(
+					"device", 
+					"unknown", 
+					// Set it to 100 years in the future
+					new Date(new Date().getTime() - 1000l*60*60*24),
+					// path
+					ServerMethods.root(), 
+					// domain
+					null, 
+					// secure
+					(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
+					// http only
+					true
+				);
+				return false;
+			}
+			else if (!allowed) {
 				return false;
 			}
 			// set a cookie to recognize device in the future
-			else if (isNewDevice) {
+			if (isNewDevice) {
 				ResponseMethods.cookie(
 					"device", 
 					deviceId, 
