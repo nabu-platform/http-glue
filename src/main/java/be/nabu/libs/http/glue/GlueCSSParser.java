@@ -22,6 +22,8 @@ public class GlueCSSParser extends GlueParser {
 	public ExecutorGroup parse(Reader reader) throws IOException, ParseException {
 		StringBuilder builder = new StringBuilder();
 		builder.append("@css\n\n");
+		int bracketCount = 0;
+		String whitespace = "";
 		String statementRegex = "^([\\s]*)([\\w-]+[\\s]*:[\\s]*.*)";
 		String commentRegex = "^([\\s]*)//(.*)";
 		String idRegex = "^([\\s]*)#(.*)";
@@ -31,6 +33,11 @@ public class GlueCSSParser extends GlueParser {
 		String appendRegex = "^([\\s]*)&(.*)";
 		for (String line : IOUtils.toString(IOUtils.wrap(reader)).replace("\r", "").split("[\n\r]+")) {
 			if (line.contains("}")) {
+				bracketCount--;
+				whitespace = tabs(bracketCount);
+				continue;
+			}
+			else if (line.trim().isEmpty()) {
 				continue;
 			}
 			boolean isBlock = line.contains("{");
@@ -38,26 +45,26 @@ public class GlueCSSParser extends GlueParser {
 				line = line.replace("{", "");
 			}
 			if (line.matches(commentRegex)) {
-				builder.append(line.replaceFirst(commentRegex, "$1#$2")).append("\n");
+				builder.append(whitespace).append(line.replaceFirst(commentRegex, "#$2")).append("\n");
 			}
 			else if (line.matches(idRegex)) {
-				builder.append(line.replaceFirst(idRegex, "$1@id $2")).append("\n");
+				builder.append(whitespace).append(line.replaceFirst(idRegex, "@id $2")).append("\n");
 			}
 			else if (line.matches(classRegex)) {
-				builder.append(line.replaceFirst(classRegex, "$1@class $2")).append("\n");
+				builder.append(whitespace).append(line.replaceFirst(classRegex, "@class $2")).append("\n");
 			}
 			else if (line.matches(stateRegex)) {
-				builder.append(line.replaceFirst(stateRegex, "$1@state $2")).append("\n").append(line.replaceFirst(stateRegex, "$1")).append("@relation self\n");
+				builder.append(whitespace).append(line.replaceFirst(stateRegex, "@state $2")).append("\n").append(whitespace).append("@relation self\n");
 			}
 			else if (line.matches(elementRegex)) {
-				builder.append(line.replaceFirst(elementRegex, "$1@element $2")).append("\n");
+				builder.append(whitespace).append(line.replaceFirst(elementRegex, "@element $2")).append("\n");
 			}
 			else if (line.matches(appendRegex)) {
-				builder.append(line.replaceFirst(appendRegex, "$1@append $2")).append("\n");
+				builder.append(whitespace).append(line.replaceFirst(appendRegex, "@append $2")).append("\n");
 			}
 			else if (line.matches(statementRegex)) {
-				// append original whitespace
-				builder.append(line.replaceFirst(statementRegex, "$1"));
+				// append whitespace
+				builder.append(whitespace);
 				// append css syntax
 				builder.append("echo(template(\"");
 				builder.append(line.replaceFirst(statementRegex, "$2").replace("\"", "\\\""));
@@ -70,10 +77,23 @@ public class GlueCSSParser extends GlueParser {
 				builder.append(line).append("\n");
 			}
 			if (isBlock) {
-				builder.append(line.replaceFirst("^([\\s]*).*", "$1")).append("sequence\n");
+				builder.append(whitespace).append("sequence\n");
+				bracketCount++;
+				whitespace = tabs(bracketCount);
 			}
 		}
+		if (bracketCount > 0) {
+			throw new ParseException("You have unclosed scopes", 0);
+		}
 		return super.parse(new StringReader(builder.toString()));
+	}
+	
+	public static String tabs(int amount) {
+		StringBuilder builder = new StringBuilder();
+		for (int i = 0; i < amount; i++) {
+			builder.append("\t");
+		}
+		return builder.toString();
 	}
 
 }
