@@ -42,6 +42,7 @@ import be.nabu.glue.impl.methods.ScriptMethods;
 import be.nabu.glue.impl.providers.SystemMethodProvider;
 import be.nabu.glue.types.GlueTypeUtils;
 import be.nabu.libs.authentication.api.Authenticator;
+import be.nabu.libs.authentication.api.DeviceValidator;
 import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.RoleHandler;
 import be.nabu.libs.authentication.api.Token;
@@ -128,6 +129,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	public static final String SESSION_COOKIE = "JSESSIONID";
 	private Authenticator authenticator;
 	private TokenValidator tokenValidator;
+	private DeviceValidator deviceValidator;
 	private String preferredContentType = MediaType.APPLICATION_JSON;
 	private boolean scanBefore = false;
 	private String realm = "default";
@@ -382,6 +384,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			runtime.getContext().put(UserMethods.AUTHENTICATOR, getAuthenticator());
 			runtime.getContext().put(UserMethods.ROLE_HANDLER, getRoleHandler());
 			runtime.getContext().put(UserMethods.PERMISSION_HANDLER, getPermissionHandler());
+			runtime.getContext().put(UserMethods.DEVICE_VALIDATOR, getDeviceValidator());
 			runtime.getContext().put(UserMethods.SSL_ONLY_SECRET, rememberSecureOnly);
 			runtime.getContext().put(UserMethods.REALM, realm);
 			runtime.getContext().put(SessionMethods.SESSION_PROVIDER, sessionProvider);
@@ -1045,6 +1048,14 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public void setTokenValidator(TokenValidator tokenValidator) {
 		this.tokenValidator = tokenValidator;
+	}
+	
+	public DeviceValidator getDeviceValidator() {
+		return deviceValidator;
+	}
+
+	public void setDeviceValidator(DeviceValidator deviceValidator) {
+		this.deviceValidator = deviceValidator;
 	}
 
 	public SessionProvider getSessionProvider() {

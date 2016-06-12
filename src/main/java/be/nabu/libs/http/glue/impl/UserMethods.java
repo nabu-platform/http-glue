@@ -8,6 +8,7 @@ import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.annotations.GlueMethod;
 import be.nabu.glue.annotations.GlueParam;
 import be.nabu.libs.authentication.api.Authenticator;
+import be.nabu.libs.authentication.api.DeviceValidator;
 import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.RoleHandler;
 import be.nabu.libs.authentication.api.Token;
@@ -71,6 +72,7 @@ public class UserMethods {
 
 	public static final String SSL_ONLY_SECRET = "sslOnlySecret";
 	public static final String AUTHENTICATOR = "authenticator";
+	public static final String DEVICE_VALIDATOR = "deviceValidator";
 	public static final String ROLE_HANDLER = "roleHandler";
 	public static final String TOKEN_VALIDATOR = "tokenValidator";
 	public static final String PERMISSION_HANDLER = "permissionHandler";
@@ -174,6 +176,20 @@ public class UserMethods {
 	@GlueMethod(description = "Allows you to retrieve the token for a certain realm")
 	public static Token token() {
 		return (Token) SessionMethods.get(GlueListener.buildTokenName(realm()));
+	}
+	
+	@GlueMethod(description = "Allows you to check if the current device is allowed for this account")
+	public static boolean deviceAllowed() {
+		Token token = token();
+		DeviceValidator deviceValidator = (DeviceValidator) ScriptRuntime.getRuntime().getContext().get(DEVICE_VALIDATOR);
+		if (token != null && deviceValidator != null) {
+			String deviceId = RequestMethods.cookie("device");
+			Header header = RequestMethods.header("User-Agent");
+			if (deviceValidator.isAllowed(token, deviceId, header == null ? null : header.getValue())) {
+				return false;
+			}
+		}
+		return true;
 	}
 	
 	@GlueMethod(description = "Authenticates the user with the given password. If succesful, it recreates the session to prevent session spoofing.", returns = "boolean")
