@@ -27,6 +27,7 @@ public class GlueCSSParser extends GlueParser {
 		String statementRegex = "^([\\s]*)([\\w-]+[\\s]*:[\\s]*.*)";
 		String commentRegex = "^([\\s]*)//(.*)";
 		String idRegex = "^([\\s]*)#(.*)";
+		String attributeRegex = "^([\\s]*)\\[(.*)";
 		String classRegex = "^([\\s]*)\\.(.*)";
 		String stateRegex = "^([\\s]*)[:]+(.*)";
 		String elementRegex = "^([\\s]*)\\$(.*)";
@@ -45,24 +46,53 @@ public class GlueCSSParser extends GlueParser {
 				line = line.replace("{", "");
 			}
 			if (line.matches(commentRegex)) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(commentRegex, "$1");
+				}
 				builder.append(whitespace).append(line.replaceFirst(commentRegex, "#$2")).append("\n");
 			}
 			else if (line.matches(idRegex)) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(idRegex, "$1");
+				}
 				builder.append(whitespace).append(line.replaceFirst(idRegex, "@id $2")).append("\n");
 			}
+			else if (line.matches(attributeRegex)) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(attributeRegex, "$1");
+				}
+				// the ending bracket is optional
+				line = line.replace("]", "");
+				builder.append(whitespace).append(line.replaceFirst(attributeRegex, "@attribute $2")).append("\n");
+			}
 			else if (line.matches(classRegex)) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(classRegex, "$1");
+				}
 				builder.append(whitespace).append(line.replaceFirst(classRegex, "@class $2")).append("\n");
 			}
 			else if (line.matches(stateRegex)) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(stateRegex, "$1");
+				}
 				builder.append(whitespace).append(line.replaceFirst(stateRegex, "@state $2")).append("\n").append(whitespace).append("@relation self\n");
 			}
 			else if (line.matches(elementRegex)) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(elementRegex, "$1");
+				}
 				builder.append(whitespace).append(line.replaceFirst(elementRegex, "@element $2")).append("\n");
 			}
 			else if (line.matches(appendRegex)) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(appendRegex, "$1");
+				}
 				builder.append(whitespace).append(line.replaceFirst(appendRegex, "@append $2")).append("\n");
 			}
 			else if (line.matches(statementRegex)) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(statementRegex, "$1");
+				}
 				// append whitespace
 				builder.append(whitespace);
 				// append css syntax
@@ -74,7 +104,10 @@ public class GlueCSSParser extends GlueParser {
 				builder.append("\"))\n");
 			}
 			else if (!isBlock) {
-				builder.append(line).append("\n");
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst("^([\\s]*).*", "$1");
+				}
+				builder.append(whitespace).append(line.replaceFirst("^[\\s]*", "")).append("\n");
 			}
 			if (isBlock) {
 				builder.append(whitespace).append("sequence\n");
