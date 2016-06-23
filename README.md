@@ -381,3 +381,23 @@ div.test, div.test2, span.test, span.test2 {
 	margin: 10px;
 }
 ```
+
+# GCSS
+
+If you have a page that ends with the extension `.gcss` you can use a syntax that resembles scss.
+
+```css
+.class1, class2 {
+	background-color: #FFFFFF
+}
+```
+
+There are a number of selectors:
+
+- comment: uses general code-style comments meaning "//"
+- by id: `#id1, id2`
+- by attribute: `[myattr=value]`
+- by class: `.class1, class2`
+- by state: `:before, after`
+- by element: `$div, a`
+- append: `&` 
