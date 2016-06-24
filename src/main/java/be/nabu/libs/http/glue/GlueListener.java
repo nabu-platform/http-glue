@@ -464,7 +464,6 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						}
 						// also set it in these responses
 						if (lastModifiedHeader != null && response.getContent() != null) {
-							System.out.println("SETTING HEADER: " + lastModifiedHeader);
 							response.getContent().setHeader(
 								new MimeHeader("Cache-Control", "public"),
 								lastModifiedHeader
