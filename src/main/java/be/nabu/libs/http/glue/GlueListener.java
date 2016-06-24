@@ -8,6 +8,7 @@ import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +48,12 @@ import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.RoleHandler;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.authentication.api.TokenValidator;
+import be.nabu.libs.cache.api.Cache;
+import be.nabu.libs.cache.api.CacheEntry;
+import be.nabu.libs.cache.api.CacheProvider;
+import be.nabu.libs.cache.api.ExplorableCache;
+import be.nabu.libs.converter.ConverterFactory;
+import be.nabu.libs.converter.api.Converter;
 import be.nabu.libs.events.api.EventHandler;
 import be.nabu.libs.http.HTTPCodes;
 import be.nabu.libs.http.HTTPException;
@@ -60,6 +67,7 @@ import be.nabu.libs.http.api.server.Session;
 import be.nabu.libs.http.api.server.SessionProvider;
 import be.nabu.libs.http.core.DefaultHTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
+import be.nabu.libs.http.glue.api.CacheKeyProvider;
 import be.nabu.libs.http.glue.impl.GlueCSSFormatter;
 import be.nabu.libs.http.glue.impl.GlueHTTPFormatter;
 import be.nabu.libs.http.glue.impl.RequestMethods;
@@ -88,12 +96,14 @@ import be.nabu.utils.mime.api.ContentPart;
 import be.nabu.utils.mime.api.Header;
 import be.nabu.utils.mime.api.ModifiableHeader;
 import be.nabu.utils.mime.api.ModifiablePart;
+import be.nabu.utils.mime.api.MultiPart;
 import be.nabu.utils.mime.impl.FormatException;
 import be.nabu.utils.mime.impl.MimeHeader;
 import be.nabu.utils.mime.impl.MimeUtils;
 import be.nabu.utils.mime.impl.ParsedMimeFormPart;
 import be.nabu.utils.mime.impl.PlainMimeContentPart;
 import be.nabu.utils.mime.impl.PlainMimeEmptyPart;
+import be.nabu.utils.mime.impl.PlainMimePart;
 
 /**
  * Important: the csrf protection only works if the user has a session as the token is stored in there.
@@ -134,9 +144,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private boolean scanBefore = false;
 	private String realm = "default";
 	private List<ContentRewriter> contentRewriters = new ArrayList<ContentRewriter>();
+	private CacheProvider cacheProvider;
+	private Converter converter = ConverterFactory.getInstance().getConverter();
 	
 	private static Logger logger = LoggerFactory.getLogger(GlueListener.class);
-
+	
+	private List<CacheKeyProvider> cacheKeyProviders = new ArrayList<CacheKeyProvider>();
+	
 	/**
 	 * You can toggle this if you always want the user to have a session
 	 */
@@ -366,7 +380,101 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			Map<String, List<String>> queryProperties = URIUtils.getQueryProperties(uri);
 			
-			List<Header> headersToAdd = scanBefore ? scan(request, queryProperties, formParameters, cookies, input, pathParameters, script.getRoot()) : new ArrayList<Header>();
+			// whether or not this script can be cached
+			// not all scripts can be cached as they might have conditional execution or permission based logic
+			// you need to annotate your scripts to achieve caching
+			boolean isCacheable = !refreshScripts && cacheProvider != null && script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("cache");
+			
+			List<Header> headersToAdd = scanBefore || isCacheable ? scan(request, queryProperties, formParameters, cookies, input, pathParameters, script.getRoot()) : new ArrayList<Header>();
+			
+			StringBuilder serializedCacheKey = null;
+			Cache cache = isCacheable ? cacheProvider.get(ScriptUtils.getFullName(script)) : null;
+			// check the cache for the script
+			if (cache != null) {
+				serializedCacheKey = new StringBuilder();
+				boolean first = true;
+				for (String key : input.keySet()) {
+					if (first) {
+						first = false;
+					}
+					else {
+						serializedCacheKey.append("&");
+					}
+					serializedCacheKey.append(key).append("=");
+					Object object = input.get(key);
+					String value;
+					if (object == null) {
+						value = "null";
+					}
+					else if (object instanceof String) {
+						value = (String) object;
+					}
+					else {
+						value = converter.convert(object, String.class);
+						if (value == null) {
+							serializedCacheKey = null;
+							break;
+						}
+					}
+					serializedCacheKey.append(value.replace("&", "%amp;").replace("=", "%eql;"));
+				}
+				if (serializedCacheKey != null) {
+					// check for additional enrichment of the cache key for this page
+					for (CacheKeyProvider provider : cacheKeyProviders) {
+						String additionalCacheKey = provider.getAdditionalCacheKey(request, token, script);
+						if (additionalCacheKey != null) {
+							serializedCacheKey.append("&").append(additionalCacheKey.replace("&", "%amp;").replace("=", "%eql;"));
+						}
+					}
+					
+					Header lastModifiedHeader = null;
+					// check for non-modified things
+					if (cache instanceof ExplorableCache) {
+						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKey.toString());
+						if (entry != null) {
+							lastModifiedHeader = new MimeHeader("Last-Modified", HTTPUtils.formatDate(entry.getLastModified()));
+							if (request.getContent() != null) {
+								Header header = MimeUtils.getHeader("If-Modified-Since", request.getContent().getHeaders());
+								if (header != null && header.getValue() != null) {
+									Date ifModifiedSince = HTTPUtils.parseDate((String) header.getValue());
+									if (!ifModifiedSince.after(entry.getLastModified())) {
+										// if it has not been modified, send back a 304
+										return new DefaultHTTPResponse(304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
+											new MimeHeader("Content-Length", "0"), 
+											new MimeHeader("Cache-Control", "public"),
+											lastModifiedHeader
+										));
+									}
+								}
+							}
+						}
+					}
+					
+					HTTPResponse response = (HTTPResponse) cache.get(serializedCacheKey.toString());
+					if (response != null) {
+						if (response.getContent() instanceof ContentPart) {
+							// we rewrap the content part because we may want to add encoding etc but this would _also_ be used for further decoding (because of how it works)
+							response = new DefaultHTTPResponse(response.getCode(), response.getMessage(), new WrappedContentPart((ContentPart) response.getContent()), response.getVersion());
+							if (allowEncoding) {
+								HTTPUtils.setContentEncoding(response.getContent(), request.getContent().getHeaders());
+							}
+							if (MimeUtils.getContentLength(response.getContent().getHeaders()) == null && MimeUtils.getHeader("Transfer-Encoding", response.getContent().getHeaders()) == null) {
+								response.getContent().setHeader(new MimeHeader("Transfer-Encoding", "chunked"));
+							}
+						}
+						// also set it in these responses
+						if (lastModifiedHeader != null && response.getContent() != null) {
+							System.out.println("SETTING HEADER: " + lastModifiedHeader);
+							response.getContent().setHeader(
+								new MimeHeader("Cache-Control", "public"),
+								lastModifiedHeader
+							);
+						}
+						return response;
+					}
+				}
+			}
+			
 			SimpleExecutionContext executionContext = new SimpleExecutionContext(environment, null, "true".equals(environment.getParameters().get("debug")));
 			executionContext.setOutputCurrentLine(false);
 			executionContext.setPrincipal(token);
@@ -399,7 +507,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			
 			// run the script
 			StringWriter writer = new StringWriter();
-			OutputFormatter buffer = scanBefore ? new SimpleOutputFormatter(writer, false) : new GlueHTTPFormatter(repository, charset, writer);
+			OutputFormatter buffer = scanBefore || isCacheable ? new SimpleOutputFormatter(writer, false) : new GlueHTTPFormatter(repository, charset, writer);
 			// if we have a @css annotation at the root, set the css formatter
 			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("css")) {
 				((SimpleOutputFormatter) buffer).setReplaceVariables(true);
@@ -523,10 +631,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					((ModifiableHeader) contentType).addComment("charset=" + charset.name());
 				}
 			}
+			boolean setChunked = false;
 			if (contentLength == null) {
 				// if there is a stream, we need to go with chunked
 				if (stream != null) {
-					headers.add(new MimeHeader("Transfer-Encoding", "chunked"));
+					setChunked = true;
 				}
 				else {
 					headers.add(new MimeHeader("Content-Length", byteContent == null ? "0" : Integer.valueOf(byteContent.length).toString()));
@@ -542,14 +651,39 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			else {
 				part = new PlainMimeEmptyPart(null, headers.toArray(new Header[headers.size()]));
 			}
-			if (allowEncoding && part instanceof ContentPart) {
-				HTTPUtils.setContentEncoding(part, request.getContent().getHeaders());
-			}
 			Integer code = (Integer) runtime.getContext().get(ResponseMethods.RESPONSE_CODE);
 			if (code == null) {
 				code = 200;
 			}
-			return new DefaultHTTPResponse(request, code, HTTPCodes.getMessage(code), part);
+			DefaultHTTPResponse response = new DefaultHTTPResponse(request, code, HTTPCodes.getMessage(code), part);
+			
+			// check if we want to cache the response
+			if (cache != null && serializedCacheKey != null) {
+				// the response should not contain any set-cookie commands
+				Header[] cookieHeaders = MimeUtils.getHeaders("Set-Cookie", response.getContent().getHeaders());
+				if (cookieHeaders == null || cookieHeaders.length == 0) {
+					cache.put(serializedCacheKey.toString(), response);
+					if (cache instanceof ExplorableCache) {
+						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKey.toString());
+						if (entry != null) {
+							response.getContent().setHeader(
+								new MimeHeader("Cache-Control", "public"),
+								new MimeHeader("Last-Modified", HTTPUtils.formatDate(entry.getLastModified()))
+							);
+						}
+					}
+				}
+				else {
+					logger.warn("Page {} is skipping cache because response cookies were detected", script);
+				}
+			}
+			if (setChunked) {
+				response.getContent().setHeader(new MimeHeader("Transfer-Encoding", "chunked"));
+			}
+			if (allowEncoding && part instanceof ContentPart) {
+				HTTPUtils.setContentEncoding(part, request.getContent().getHeaders());
+			}
+			return response;
 		}
 		catch (Exception e) {
 			throw new HTTPException(500, e);	
@@ -955,6 +1089,14 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		this.filePath = filePath;
 	}
 	
+	public CacheProvider getCacheProvider() {
+		return cacheProvider;
+	}
+
+	public void setCacheProvider(CacheProvider cacheProvider) {
+		this.cacheProvider = cacheProvider;
+	}
+
 	public static class PathAnalysis {
 		// the regex you can use to extract the groups
 		private String regex;
@@ -1078,6 +1220,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		return substituterProviders;
 	}
 	
+	public void addCacheKeyProvider(CacheKeyProvider...providers) {
+		this.cacheKeyProviders.addAll(Arrays.asList(providers));
+	}
+	
 	public void blacklistLogin(String ip, Date until) {
 		synchronized(loginBlacklist) {
 			if (until == null || until.before(new Date())) {
@@ -1124,4 +1270,19 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		return environment;
 	}
 	
+	private static class WrappedContentPart extends PlainMimePart implements ContentPart {
+
+		private ContentPart content;
+
+		public WrappedContentPart(ContentPart content) throws IOException {
+			super((MultiPart) content.getParent(), content.getHeaders());
+			this.content = content;
+		}
+
+		@Override
+		public ReadableContainer<ByteBuffer> getReadable() throws IOException {
+			return content.getReadable();
+		}
+		
+	}
 }
