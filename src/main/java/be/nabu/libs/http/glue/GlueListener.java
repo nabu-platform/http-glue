@@ -6,6 +6,8 @@ import java.io.StringWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -388,6 +390,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			List<Header> headersToAdd = scanBefore || isCacheable ? scan(request, queryProperties, formParameters, cookies, input, pathParameters, script.getRoot()) : new ArrayList<Header>();
 			
 			StringBuilder serializedCacheKey = null;
+			String serializedCacheKeyString = null;
+			String cacheHash = null;
 			Cache cache = isCacheable ? cacheProvider.get(ScriptUtils.getFullName(script)) : null;
 			// check the cache for the script
 			if (cache != null) {
@@ -418,6 +422,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					}
 					serializedCacheKey.append(value.replace("&", "%amp;").replace("=", "%eql;"));
 				}
+				
 				if (serializedCacheKey != null) {
 					// check for additional enrichment of the cache key for this page
 					for (CacheKeyProvider provider : cacheKeyProviders) {
@@ -428,9 +433,21 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					}
 					
 					Header lastModifiedHeader = null;
+					serializedCacheKeyString = serializedCacheKey.toString();
+					cacheHash = hash(serializedCacheKeyString.getBytes(Charset.forName("UTF-8")), "MD5");
+					
+					boolean isDifferentEtag = false;
+					if (request.getContent() != null) {
+						Header header = MimeUtils.getHeader("If-None-Match", request.getContent().getHeaders());
+						if (header != null && header.getValue() != null) {
+							if (!cacheHash.equals(header.getValue())) {
+								isDifferentEtag = true;
+							}
+						}
+					}
 					// check for non-modified things
-					if (cache instanceof ExplorableCache) {
-						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKey.toString());
+					if (cache instanceof ExplorableCache && !isDifferentEtag) {
+						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKeyString);
 						if (entry != null) {
 							lastModifiedHeader = new MimeHeader("Last-Modified", HTTPUtils.formatDate(entry.getLastModified()));
 							if (request.getContent() != null) {
@@ -450,7 +467,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						}
 					}
 					
-					HTTPResponse response = (HTTPResponse) cache.get(serializedCacheKey.toString());
+					HTTPResponse response = (HTTPResponse) cache.get(serializedCacheKeyString);
 					if (response != null) {
 						if (response.getContent() instanceof ContentPart) {
 							// we rewrap the content part because we may want to add encoding etc but this would _also_ be used for further decoding (because of how it works)
@@ -462,12 +479,24 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 								response.getContent().setHeader(new MimeHeader("Transfer-Encoding", "chunked"));
 							}
 						}
-						// also set it in these responses
-						if (lastModifiedHeader != null && response.getContent() != null) {
-							response.getContent().setHeader(
-								new MimeHeader("Cache-Control", "public"),
-								lastModifiedHeader
-							);
+						if (response.getContent() != null) {
+							// also set it in these responses
+							if (lastModifiedHeader != null) {
+								response.getContent().setHeader(
+									new MimeHeader("Cache-Control", "public"),
+									lastModifiedHeader
+								);
+							}
+							// set a cookie for the session if it's a new session
+							if (session != null && !session.getId().equals(originalSessionId)) {
+								// renew the session as well
+								ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
+								cookieHeader.addComment("Path=" + serverPath);
+								cookieHeader.addComment("HttpOnly");
+								response.getContent().setHeader(cookieHeader);
+							}
+							// set etags to identify the cached instance
+							response.getContent().setHeader(new MimeHeader("ETag", cacheHash));
 						}
 						return response;
 					}
@@ -657,15 +686,16 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			DefaultHTTPResponse response = new DefaultHTTPResponse(request, code, HTTPCodes.getMessage(code), part);
 			
 			// check if we want to cache the response
-			if (cache != null && serializedCacheKey != null) {
+			if (cache != null && serializedCacheKeyString != null) {
 				// the response should not contain any set-cookie commands
 				Header[] cookieHeaders = MimeUtils.getHeaders("Set-Cookie", response.getContent().getHeaders());
 				if (cookieHeaders == null || cookieHeaders.length == 0) {
-					cache.put(serializedCacheKey.toString(), response);
+					cache.put(serializedCacheKeyString, response);
 					if (cache instanceof ExplorableCache) {
-						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKey.toString());
+						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKeyString);
 						if (entry != null) {
 							response.getContent().setHeader(
+								new MimeHeader("ETag", cacheHash),
 								new MimeHeader("Cache-Control", "public"),
 								new MimeHeader("Last-Modified", HTTPUtils.formatDate(entry.getLastModified()))
 							);
@@ -730,6 +760,22 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 		}
 		return session;
+	}
+	
+	public static String hash(byte[] bytes, String algorithm) throws IOException {
+		try {
+			MessageDigest digest = MessageDigest.getInstance(algorithm);
+			digest.update(bytes, 0, bytes.length);
+			byte [] hash = digest.digest();
+			StringBuffer string = new StringBuffer();
+			for (int i = 0; i < hash.length; ++i) {
+				string.append(Integer.toHexString((hash[i] & 0xFF) | 0x100).substring(1, 3));
+			}
+			return string.toString();
+		}
+		catch (NoSuchAlgorithmException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	private static int getFormPosition(String stringContent) {
