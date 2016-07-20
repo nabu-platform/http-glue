@@ -691,6 +691,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				Header[] cookieHeaders = MimeUtils.getHeaders("Set-Cookie", response.getContent().getHeaders());
 				if (cookieHeaders == null || cookieHeaders.length == 0) {
 					cache.put(serializedCacheKeyString, response);
+					// if the content for the response was a stream, it will be read by the caching routine, we need to reopen it from cache
+					if (stream != null) {
+						response = (DefaultHTTPResponse) cache.get(serializedCacheKeyString);
+					}
 					if (cache instanceof ExplorableCache) {
 						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKeyString);
 						if (entry != null) {
