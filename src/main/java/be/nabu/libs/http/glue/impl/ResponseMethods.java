@@ -233,7 +233,7 @@ public class ResponseMethods {
 	}
 	
 	public static void redirect(String location, Boolean permanent) throws ParseException, IOException, FormatException {
-		ResponseMethods.code(permanent != null && permanent ? 301 : 307);
+		ResponseMethods.code(permanent != null && permanent ? 301 : ("get".equalsIgnoreCase(RequestMethods.method()) ? 307 : 303));
 		ResponseMethods.header("Location", location.startsWith("http://") || location.startsWith("https://") ? location : RequestMethods.url(location).toString(), true);
 		ServerMethods.abort();
 	}
