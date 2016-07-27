@@ -348,6 +348,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 
 			boolean noCsrf = (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("nocsrf"));
+			String csrfAnnotation = script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null ? script.getRoot().getContext().getAnnotations().get("csrf") : null;
+			if (csrfAnnotation != null) {
+				noCsrf = csrfAnnotation.equalsIgnoreCase("none");
+			}
 			Map<String, Object> input = new HashMap<String, Object>();
 			// scan all inputs, check for annotations to indicate what you might want
 			@SuppressWarnings("rawtypes")
@@ -374,6 +378,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					else if (!session.get(CSRF_TOKEN).equals(((List<?>) formParameters.get(CSRF_TOKEN)).get(0))) {
 						logger.warn("Possible CSRF attack: csrf token given by client does not match expected csrf token in session");
 						throw new HTTPException(400, "CSRF check failed, csrf token given by client does not match expected csrf token in session");
+					}
+					// if you define the token as being single use, remove the token now that it has been used so it can only be used once
+					// this is interesting for more sensitive pages like login pages etc
+					else if ("single".equals(csrfAnnotation)) {
+						session.set(CSRF_TOKEN, null);
 					}
 				}
 			}
@@ -625,8 +634,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						cookieHeader.addComment("HttpOnly");
 						headers.add(cookieHeader);
 						runtime.getContext().put(SessionMethods.SESSION, session);
+						
 					}
 					// remove any previously existing CSRF token
+					// only remove it if we have a new form, otherwise getting additional (resourc-y) pages could reset the csrf token of an initial form-containing page
 					session.set(CSRF_TOKEN, null);
 					stringContent = addCsrfCheck(session, stringContent, formPosition);
 				}
