@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 
 import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.ScriptUtils;
+import be.nabu.glue.annotations.GlueMethod;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.HTTPException;
 import be.nabu.libs.metrics.api.MetricInstance;
@@ -46,6 +47,7 @@ public class ServerMethods {
 		getLogger().error(message);
 	}
 	
+	@GlueMethod(version = 1)
 	public static void abort() {
 		ScriptRuntime.getRuntime().abort();
 	}
