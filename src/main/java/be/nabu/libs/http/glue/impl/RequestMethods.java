@@ -158,9 +158,9 @@ public class RequestMethods {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public static String path(String name) {
+	public static String path(String name) throws FormatException {
 		if (name == null) {
-			return null;
+			return url(null).getPath();
 		}
 		List<String> all = (List<String>) paths(name);
 		return all == null || all.isEmpty() ? null : all.get(0);
