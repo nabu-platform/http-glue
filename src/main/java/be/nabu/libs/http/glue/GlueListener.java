@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import be.nabu.glue.Main;
+import be.nabu.glue.OptionalTypeProviderFactory;
 import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.ScriptUtils;
 import be.nabu.glue.api.AssignmentExecutor;
@@ -32,6 +33,7 @@ import be.nabu.glue.api.ExecutionEnvironment;
 import be.nabu.glue.api.Executor;
 import be.nabu.glue.api.ExecutorGroup;
 import be.nabu.glue.api.GroupedScriptRepository;
+import be.nabu.glue.api.OptionalTypeConverter;
 import be.nabu.glue.api.OutputFormatter;
 import be.nabu.glue.api.Script;
 import be.nabu.glue.api.ScriptRepository;
@@ -899,37 +901,56 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				if (readable != null) {
 					// unmarshal the content
 					if (optionalType != null) {
-						ComplexType type = null;
 						try {
-							Script script = repository.getScript(optionalType);
-							if (script != null) {
-								type = GlueTypeUtils.toType(ScriptUtils.getFullName(script), ScriptUtils.getInputs(script), new MapTypeGenerator(), repository);
+							ComplexType type = null;
+							try {
+								Script script = repository.getScript(optionalType);
+								if (script != null) {
+									type = GlueTypeUtils.toType(ScriptUtils.getFullName(script), ScriptUtils.getInputs(script), new MapTypeGenerator(), repository);
+								}
+							}
+							catch (ParseException e) {
+								logger.error("Can not parse script '" + type + "'", e);
+							}
+							if (type == null) {
+								DefinedType resolved = DefinedTypeResolverFactory.getInstance().getResolver().resolve(optionalType);
+								if (resolved instanceof ComplexType) {
+									type = (ComplexType) resolved;
+								}
+							}
+							if (type == null) {
+								byte[] bytes = IOUtils.toBytes(readable);
+								// if we want a string, use the added context of the charset (if any) to decode it
+								if (optionalType.equals("string") || optionalType.equals("java.lang.String")) {
+									String originalCharset = MimeUtils.getCharset(entity.getContent().getHeaders());
+									value = originalCharset == null ? new String(bytes) : new String(bytes, originalCharset); 
+								}
+								else {
+									OptionalTypeConverter optionalTypeConverter = OptionalTypeProviderFactory.getInstance().getProvider().getConverter(optionalType);
+									if (optionalTypeConverter == null) {
+										throw new IllegalArgumentException("Can not resolve optional type: " + optionalType);
+									}
+									value = optionalTypeConverter.convert(bytes);
+								}
+							}
+							else {
+								String contentType = MimeUtils.getContentType(entity.getContent().getHeaders());
+								String charsetName = MimeUtils.getCharset(entity.getContent().getHeaders());
+								UnmarshallableBinding binding = MediaType.APPLICATION_JSON.equals(contentType)
+									? new JSONBinding(type, charset == null ? charset : Charset.forName(charsetName))
+									: new XMLBinding(type, charset == null ? charset : Charset.forName(charsetName));
+								try {
+									value = binding.unmarshal(IOUtils.toInputStream(readable, true), new Window[0]);
+								}
+								catch (ParseException e) {
+									logger.error("Could not parse request data", e);
+									throw new HTTPException(400, "Invalid data");
+								}
 							}
 						}
-						catch (ParseException e) {
-							logger.error("Can not parse script '" + type + "'", e);
+						finally {
+							readable.close();
 						}
-						if (type == null) {
-							DefinedType resolved = DefinedTypeResolverFactory.getInstance().getResolver().resolve(optionalType);
-							if (resolved instanceof ComplexType) {
-								type = (ComplexType) resolved;
-							}
-						}
-						if (type == null) {
-							throw new IllegalArgumentException("Can not resolve complex type: " + optionalType);
-						}
-						String contentType = MimeUtils.getContentType(entity.getContent().getHeaders());
-						String charsetName = MimeUtils.getCharset(entity.getContent().getHeaders());
-						UnmarshallableBinding binding = MediaType.APPLICATION_JSON.equals(contentType)
-							? new JSONBinding(type, charset == null ? charset : Charset.forName(charsetName))
-							: new XMLBinding(type, charset == null ? charset : Charset.forName(charsetName));
-						try {
-							value = binding.unmarshal(IOUtils.toInputStream(readable, true), new Window[0]);
-						}
-						catch (ParseException e) {
-							logger.error("Could not parse request data", e);
-							throw new HTTPException(400, "Invalid data");
-						}  
 					}
 					// just set the stream
 					else {
