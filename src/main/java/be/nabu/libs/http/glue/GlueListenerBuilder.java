@@ -5,8 +5,8 @@ import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 
 import be.nabu.glue.Main;
-import be.nabu.glue.MultipleRepository;
 import be.nabu.glue.impl.SimpleExecutionEnvironment;
+import be.nabu.glue.utils.MultipleRepository;
 import be.nabu.libs.http.api.server.SessionProvider;
 
 public class GlueListenerBuilder {

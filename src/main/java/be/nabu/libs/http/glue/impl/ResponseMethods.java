@@ -18,9 +18,9 @@ import javax.ws.rs.core.MediaType;
 
 import org.w3c.dom.Document;
 
-import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.annotations.GlueParam;
 import be.nabu.glue.impl.TransactionalCloseable;
+import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.core.HTTPUtils;

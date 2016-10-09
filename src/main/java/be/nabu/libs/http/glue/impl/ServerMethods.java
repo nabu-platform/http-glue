@@ -3,9 +3,9 @@ package be.nabu.libs.http.glue.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import be.nabu.glue.ScriptRuntime;
-import be.nabu.glue.ScriptUtils;
 import be.nabu.glue.annotations.GlueMethod;
+import be.nabu.glue.utils.ScriptRuntime;
+import be.nabu.glue.utils.ScriptUtils;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.HTTPException;
 import be.nabu.libs.metrics.api.MetricInstance;

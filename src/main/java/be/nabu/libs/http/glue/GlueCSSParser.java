@@ -8,7 +8,7 @@ import java.text.ParseException;
 import be.nabu.glue.api.ExecutionContext;
 import be.nabu.glue.api.ExecutorGroup;
 import be.nabu.glue.api.ScriptRepository;
-import be.nabu.glue.impl.parsers.GlueParser;
+import be.nabu.glue.core.impl.parsers.GlueParser;
 import be.nabu.libs.evaluator.api.OperationProvider;
 import be.nabu.utils.io.IOUtils;
 

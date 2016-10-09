@@ -4,9 +4,9 @@ import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
 
-import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.annotations.GlueMethod;
 import be.nabu.glue.annotations.GlueParam;
+import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.DeviceValidator;
 import be.nabu.libs.authentication.api.PermissionHandler;

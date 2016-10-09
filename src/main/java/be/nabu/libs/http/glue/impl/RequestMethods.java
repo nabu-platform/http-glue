@@ -5,8 +5,8 @@ import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 
-import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.annotations.GlueParam;
+import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.api.HTTPRequest;

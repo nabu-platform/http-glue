@@ -6,11 +6,11 @@ import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
 
-import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.api.AssignmentExecutor;
 import be.nabu.glue.api.Executor;
 import be.nabu.glue.api.ScriptRepository;
 import be.nabu.glue.impl.formatters.SimpleOutputFormatter;
+import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.http.glue.GlueListener;
 
 public class GlueHTTPFormatter extends SimpleOutputFormatter {

@@ -9,11 +9,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import be.nabu.glue.ScriptRuntime;
 import be.nabu.glue.api.ExecutionEnvironment;
 import be.nabu.glue.api.Script;
 import be.nabu.glue.api.ScriptRepository;
 import be.nabu.glue.impl.SimpleExecutionContext;
+import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.events.api.EventHandler;
 import be.nabu.libs.http.HTTPCodes;
 import be.nabu.libs.http.HTTPException;

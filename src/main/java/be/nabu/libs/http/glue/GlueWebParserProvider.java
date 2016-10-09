@@ -1,9 +1,9 @@
 package be.nabu.libs.http.glue;
 
-import be.nabu.glue.api.MethodProvider;
 import be.nabu.glue.api.Parser;
 import be.nabu.glue.api.ScriptRepository;
-import be.nabu.glue.impl.parsers.GlueParserProvider;
+import be.nabu.glue.core.api.MethodProvider;
+import be.nabu.glue.core.impl.parsers.GlueParserProvider;
 
 public class GlueWebParserProvider extends GlueParserProvider {
 	
