@@ -8,6 +8,7 @@ import be.nabu.glue.annotations.GlueMethod;
 import be.nabu.glue.annotations.GlueParam;
 import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.authentication.api.Authenticator;
+import be.nabu.libs.authentication.api.Device;
 import be.nabu.libs.authentication.api.DeviceValidator;
 import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.RoleHandler;
@@ -15,7 +16,9 @@ import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.authentication.api.TokenValidator;
 import be.nabu.libs.authentication.api.TokenWithSecret;
 import be.nabu.libs.authentication.api.principals.BasicPrincipal;
+import be.nabu.libs.authentication.api.principals.DevicePrincipal;
 import be.nabu.libs.authentication.api.principals.SharedSecretPrincipal;
+import be.nabu.libs.authentication.impl.DeviceImpl;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.HTTPException;
 import be.nabu.libs.http.api.HTTPEntity;
@@ -28,14 +31,16 @@ import be.nabu.utils.mime.impl.MimeUtils;
 @MethodProviderClass(namespace = "user")
 public class UserMethods {
 
-	public static final class SharedSecretPrincipalImplementation implements SharedSecretPrincipal {
+	public static final class SharedSecretPrincipalImplementation implements SharedSecretPrincipal, DevicePrincipal {
 		private final String secret;
 		private final String name;
 		private static final long serialVersionUID = 1L;
+		private Device device;
 
-		private SharedSecretPrincipalImplementation(String secret, String name) {
+		private SharedSecretPrincipalImplementation(String secret, String name, Device device) {
 			this.secret = secret;
 			this.name = name;
+			this.device = device;
 		}
 
 		@Override
@@ -47,16 +52,24 @@ public class UserMethods {
 		public String getSecret() {
 			return secret;
 		}
+
+		@Override
+		public Device getDevice() {
+			return device;
+		}
+		
 	}
 
-	public static final class BasicPrincipalImplementation implements BasicPrincipal {
+	public static final class BasicPrincipalImplementation implements BasicPrincipal, DevicePrincipal {
 		private final String password;
 		private final String name;
 		private static final long serialVersionUID = 1L;
+		private Device device;
 
-		private BasicPrincipalImplementation(String password, String name) {
+		private BasicPrincipalImplementation(String password, String name, Device device) {
 			this.password = password;
 			this.name = name;
+			this.device = device;
 		}
 
 		@Override
@@ -67,6 +80,11 @@ public class UserMethods {
 		@Override
 		public String getPassword() {
 			return password;
+		}
+
+		@Override
+		public Device getDevice() {
+			return device;
 		}
 	}
 
@@ -112,6 +130,23 @@ public class UserMethods {
 		return null;
 	}
 	
+	private static String getUserAgent() {
+		Header header = RequestMethods.header("User-Agent");
+		if (header == null) {
+			return null;
+		}
+		else {
+			StringBuilder builder = new StringBuilder();
+			builder.append(header.getValue());
+			if (header.getComments() != null) {
+				for (String comment : header.getComments()) {
+					builder.append("; " + comment);
+				}
+			}
+			return builder.toString();
+		}
+	}
+	
 	@GlueMethod(description = "Tries to remember the user based on a shared secret")
 	public static boolean remember() {
 		if (isBlacklisted()) {
@@ -119,14 +154,19 @@ public class UserMethods {
 		}
 		String realm = realm();
 		String cookie = RequestMethods.cookie("Realm-" + realm);
-		if (cookie != null) {
+		String deviceId = RequestMethods.cookie("Device-" + realm);
+		if (cookie != null && deviceId != null) {
 			int index = cookie.indexOf('/');
 			if (index > 0) {
 				final String name = cookie.substring(0, index);
 				final String secret = cookie.substring(index + 1);
 				Authenticator authenticator = (Authenticator) ScriptRuntime.getRuntime().getContext().get(AUTHENTICATOR);
 				if (authenticator != null) {
-					Token token = authenticator.authenticate(realm, new SharedSecretPrincipalImplementation(secret, name));
+					Token token = authenticator.authenticate(realm, new SharedSecretPrincipalImplementation(
+						secret, 
+						name,
+						new DeviceImpl(deviceId, getUserAgent(), getIp())
+					));
 					if (token != null) {
 						SessionMethods.create(true);
 						SessionMethods.set(GlueListener.buildTokenName(realm), token);
@@ -181,9 +221,10 @@ public class UserMethods {
 	@GlueMethod(description = "Allows you to check if the current device is allowed for this account")
 	public static boolean device() {
 		Token token = token();
+		String realm = realm();
 		DeviceValidator deviceValidator = (DeviceValidator) ScriptRuntime.getRuntime().getContext().get(DEVICE_VALIDATOR);
 		if (token != null && deviceValidator != null) {
-			String deviceId = RequestMethods.cookie("device");
+			String deviceId = RequestMethods.cookie("Device-" + realm);
 			boolean isNewDevice = false;
 			Header remoteAddress = RequestMethods.header(ServerHeader.REMOTE_ADDRESS.getName());
 			if (deviceId == null) {
@@ -202,7 +243,7 @@ public class UserMethods {
 			if (allowed == null) {
 				// unset the cookie
 				ResponseMethods.cookie(
-					"device", 
+					"Device-" + realm, 
 					"unknown", 
 					// Set it to 100 years in the future
 					new Date(new Date().getTime() - 1000l*60*60*24),
@@ -223,7 +264,7 @@ public class UserMethods {
 			// set a cookie to recognize device in the future
 			if (isNewDevice) {
 				ResponseMethods.cookie(
-					"device", 
+					"Device-" + realm, 
 					deviceId, 
 					// Set it to 100 years in the future
 					new Date(new Date().getTime() + 1000l*60*60*24*365*100),
@@ -252,7 +293,34 @@ public class UserMethods {
 		String realm = realm();
 		Authenticator authenticator = (Authenticator) ScriptRuntime.getRuntime().getContext().get(AUTHENTICATOR);
 		if (authenticator != null) {
-			Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(password, name));
+			boolean isNewDevice = false;
+			String deviceId = RequestMethods.cookie("Device-" + realm);
+			if (deviceId == null) {
+				deviceId = UUID.randomUUID().toString().replace("-", "");
+				isNewDevice = true;
+			}
+			Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(
+				password, 
+				name, 
+				new DeviceImpl(deviceId, getUserAgent(), getIp())
+			));
+			// if it's a new device, set a cookie for it
+			if (token != null && isNewDevice) {
+				ResponseMethods.cookie(
+					"Device-" + realm, 
+					deviceId, 
+					// Set it to 100 years in the future
+					new Date(new Date().getTime() + 1000l*60*60*24*365*100),
+					// path
+					ServerMethods.root(), 
+					// domain
+					null, 
+					// secure
+					(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
+					// http only
+					true
+				);
+			}
 			// if we have generated a token with a secret, set it in a cookie to be remembered
 			if (token instanceof TokenWithSecret && ((TokenWithSecret) token).getSecret() != null && (remember == null || remember)) {
 				ResponseMethods.cookie(
