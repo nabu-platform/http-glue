@@ -3,6 +3,7 @@ package be.nabu.libs.http.glue.impl;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.Charset;
+import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
 
@@ -11,6 +12,9 @@ import be.nabu.glue.api.Executor;
 import be.nabu.glue.api.ScriptRepository;
 import be.nabu.glue.impl.formatters.SimpleOutputFormatter;
 import be.nabu.glue.utils.ScriptRuntime;
+import be.nabu.libs.authentication.api.PermissionHandler;
+import be.nabu.libs.authentication.api.RoleHandler;
+import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.http.glue.GlueListener;
 
 public class GlueHTTPFormatter extends SimpleOutputFormatter {
@@ -56,6 +60,7 @@ public class GlueHTTPFormatter extends SimpleOutputFormatter {
 	 * This checks for the existence of a @realm annotation
 	 * Note that the roles in the annotation are OR-ed instead of AND-ed (as the user.hasRoles() does)
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
 	public boolean shouldExecute(Executor executor) {
 		if (!super.shouldExecute(executor)) {
@@ -66,25 +71,26 @@ public class GlueHTTPFormatter extends SimpleOutputFormatter {
 			return true;
 		}
 		String role = annotations.get("role");
-		if (role == null || role.trim().isEmpty()) {
-			String permission = annotations.get("permission");
-			if (permission == null || permission.trim().isEmpty()) {
-				return true;
+		Token token = UserMethods.token();
+		if (role != null && !role.trim().isEmpty()) {
+			RoleHandler roleHandler = (RoleHandler) ScriptRuntime.getRuntime().getContext().get(UserMethods.ROLE_HANDLER);
+			if (!GlueListener.checkRole(roleHandler, token, role)) {
+				return false;
 			}
-			for (String permissionToCheck : permission.split("[\\s,]+")) {
-				if (UserMethods.hasPermission(permissionToCheck, RequestMethods.method().toLowerCase())) {
-					return true;
+		}
+		
+		String permission = annotations.get("permission");
+		if (permission != null && !permission.trim().isEmpty()) {
+			PermissionHandler permissionHandler = (PermissionHandler) ScriptRuntime.getRuntime().getContext().get(UserMethods.PERMISSION_HANDLER);
+			try {
+				if (!GlueListener.checkPermission(permissionHandler, token, permission, (Map<String, String>) RequestMethods.paths(null))) {
+					return false;
 				}
 			}
-			return false;
-		}
-		else {
-			for (String roleToCheck : role.split("[\\s,]+")) {
-				if (UserMethods.hasRole(roleToCheck)) {
-					return true;
-				}
+			catch (ParseException e) {
+				throw new RuntimeException(e);
 			}
-			return false;
 		}
+		return true;
 	}
 }

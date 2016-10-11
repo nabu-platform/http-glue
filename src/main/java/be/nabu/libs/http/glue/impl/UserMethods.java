@@ -21,12 +21,10 @@ import be.nabu.libs.authentication.api.principals.SharedSecretPrincipal;
 import be.nabu.libs.authentication.impl.DeviceImpl;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.HTTPException;
-import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.core.ServerHeader;
 import be.nabu.libs.http.glue.GlueListener;
 import be.nabu.libs.metrics.api.MetricInstance;
 import be.nabu.utils.mime.api.Header;
-import be.nabu.utils.mime.impl.MimeUtils;
 
 @MethodProviderClass(namespace = "user")
 public class UserMethods {
@@ -103,7 +101,7 @@ public class UserMethods {
 	
 	@SuppressWarnings("unchecked")
 	private static boolean isBlacklisted() {
-		String ip = getIp();
+		String ip = GlueHTTPUtils.getIp(RequestMethods.headers(null));
 		if (ip != null) {
 			Map<String, Date> blacklist = (Map<String, Date>) ScriptRuntime.getRuntime().getContext().get(LOGIN_BLACKLIST);
 			if (blacklist != null) {
@@ -119,32 +117,6 @@ public class UserMethods {
 			}
 		}
 		return false;
-	}
-
-	private static String getIp() {
-		HTTPEntity content = RequestMethods.content();
-		if (content.getContent() != null) {
-			Header header = MimeUtils.getHeader(ServerHeader.REMOTE_ADDRESS.getName(), content.getContent().getHeaders());
-			return header == null ? null : header.getValue();
-		}
-		return null;
-	}
-	
-	private static String getUserAgent() {
-		Header header = RequestMethods.header("User-Agent");
-		if (header == null) {
-			return null;
-		}
-		else {
-			StringBuilder builder = new StringBuilder();
-			builder.append(header.getValue());
-			if (header.getComments() != null) {
-				for (String comment : header.getComments()) {
-					builder.append("; " + comment);
-				}
-			}
-			return builder.toString();
-		}
 	}
 	
 	@GlueMethod(description = "Tries to remember the user based on a shared secret")
@@ -165,7 +137,7 @@ public class UserMethods {
 					Token token = authenticator.authenticate(realm, new SharedSecretPrincipalImplementation(
 						secret, 
 						name,
-						new DeviceImpl(deviceId, getUserAgent(), getIp())
+						new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getIp(RequestMethods.headers(null)))
 					));
 					if (token != null) {
 						SessionMethods.create(true);
@@ -176,7 +148,7 @@ public class UserMethods {
 						forget();
 						MetricInstance metrics = ServerMethods.metrics();
 						if (metrics != null) {
-							metrics.increment(METRICS_REMEMBER_FAILED + ":" + getIp(), 1);
+							metrics.increment(METRICS_REMEMBER_FAILED + ":" + GlueHTTPUtils.getIp(RequestMethods.headers(null)), 1);
 						}
 					}
 				}
@@ -224,6 +196,9 @@ public class UserMethods {
 		String realm = realm();
 		DeviceValidator deviceValidator = (DeviceValidator) ScriptRuntime.getRuntime().getContext().get(DEVICE_VALIDATOR);
 		if (token != null && deviceValidator != null) {
+			// devices are realm specific because you want the id to be globally unique
+			// a device may have been approved for use with realm 1 but not realm 2
+			// however the id is a primary key and is linked to exactly one user...which is linked to exactly one realm
 			String deviceId = RequestMethods.cookie("Device-" + realm);
 			boolean isNewDevice = false;
 			Header remoteAddress = RequestMethods.header(ServerHeader.REMOTE_ADDRESS.getName());
@@ -302,7 +277,7 @@ public class UserMethods {
 			Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(
 				password, 
 				name, 
-				new DeviceImpl(deviceId, getUserAgent(), getIp())
+				new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getIp(RequestMethods.headers(null)))
 			));
 			// if it's a new device, set a cookie for it
 			if (token != null && isNewDevice) {
@@ -348,9 +323,9 @@ public class UserMethods {
 				MetricInstance metrics = ServerMethods.metrics();
 				if (metrics != null) {
 					// this allows you to track multiple failed logins from a single ip for a single or multiple user names (non-distributed brute-force attack)
-					metrics.increment(METRICS_LOGIN_FAILED + ":" + getIp() + ":" + name, 1);
+					metrics.increment(METRICS_LOGIN_FAILED + ":" + GlueHTTPUtils.getIp(RequestMethods.headers(null)) + ":" + name, 1);
 					// this allows you to tracker multiple failed logins from multiple ips for a single user name (distributed brute-force attack attack)
-					metrics.increment(METRICS_USERNAME_FAILED + ":" + name + ":" + getIp(), 1);
+					metrics.increment(METRICS_USERNAME_FAILED + ":" + name + ":" + GlueHTTPUtils.getIp(RequestMethods.headers(null)), 1);
 				}
 			}
 		}

@@ -58,6 +58,9 @@ import be.nabu.libs.cache.api.CacheProvider;
 import be.nabu.libs.cache.api.ExplorableCache;
 import be.nabu.libs.converter.ConverterFactory;
 import be.nabu.libs.converter.api.Converter;
+import be.nabu.libs.evaluator.QueryParser;
+import be.nabu.libs.evaluator.QueryPart;
+import be.nabu.libs.evaluator.QueryPart.Type;
 import be.nabu.libs.events.api.EventHandler;
 import be.nabu.libs.http.HTTPCodes;
 import be.nabu.libs.http.HTTPException;
@@ -243,7 +246,6 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (path.contains(".")) {
 				return null;
 			}
-			String context;
 			if (!path.startsWith(serverPath)) {
 				return null;
 			}
@@ -261,7 +263,6 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				if (path.startsWith("/")) {
 					path = path.substring(1);
 				}
-				context = path;
 				path = path.replace('/', '.');
 			}
 			if (path.trim().isEmpty()) {
@@ -342,10 +343,16 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					token = null;
 				}
 			}
-			// check permissions automatically
-			if (permissionHandler != null) {
-				if (!permissionHandler.hasPermission(token, context, request.getMethod().toLowerCase())) {
-					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have permission to '" + request.getMethod().toLowerCase() + "' on: " + context);
+			
+			// if we have root annotations, they may contain security annotations
+			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null) {
+				if (script.getRoot().getContext().getAnnotations().containsKey("role") && roleHandler != null
+						&& !checkRole(roleHandler, token, script.getRoot().getContext().getAnnotations().get("role"))) {
+					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required role for '" + ScriptUtils.getFullName(script));
+				}
+				if (script.getRoot().getContext().getAnnotations().containsKey("permission") && permissionHandler != null
+						&& !checkPermission(permissionHandler, token, script.getRoot().getContext().getAnnotations().get("permission"), pathParameters)) {
+					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required permission for '" + ScriptUtils.getFullName(script));
 				}
 			}
 
@@ -734,6 +741,50 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		catch (Exception e) {
 			throw new HTTPException(500, e);	
 		}
+	}
+
+	public static boolean checkPermission(PermissionHandler permissionHandler, Token token, String permissionValue, Map<String, String> pathParameters) throws ParseException {
+		QueryParser parser = QueryParser.getInstance();
+		boolean allowed = false;
+		for (String permission : permissionValue.split("[\\s]*,[\\s]*")) {
+			List<QueryPart> parsed = parser.parse(permission);
+			if (parsed.isEmpty()) {
+				continue;
+			}
+			String action = (String) parsed.get(0).getContent();
+			String context = null;
+			// action(variable)
+			if (parsed.size() == 4) {
+				// TODO: currently limited to path variables because the developer chooses the name, not the user
+				// in a future version, I can add support for accessing other variables, for example: action(get: variable)
+				// here the developer specifically chooses a variable from another scope
+				// but in most cases, the object that you are manipulating should have an identifier in the path anyway...
+				if (parsed.get(2).getType() == Type.VARIABLE) {
+					context = pathParameters.get(parsed.get(2).getContent());
+				}
+				// otherwise, we assume it's a string, number,...
+				else {
+					context = parsed.get(2).getContent() == null ? null : parsed.get(2).getContent().toString();
+				}
+			}
+			// you only have an action
+			if (permissionHandler.hasPermission(token, context, action)) {
+				allowed = true;
+				break;
+			}
+		}
+		return allowed;
+	}
+
+	public static boolean checkRole(RoleHandler roleHandler, Token token, String roleValue) {
+		boolean allowed = false;
+		for (String role : roleValue.split("[\\s]*,[\\s]*")) {
+			if (roleHandler.hasRole(token, role)) {
+				allowed = true;
+				break;
+			}
+		}
+		return allowed;
 	}
 
 	public static boolean isPublicScript(Script script) throws IOException, ParseException {
