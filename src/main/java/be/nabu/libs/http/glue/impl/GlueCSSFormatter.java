@@ -87,13 +87,14 @@ public class GlueCSSFormatter implements OutputFormatter {
 	@Override
 	public void print(Object...messages) {
 		if (messages != null && messages.length > 0) {
-			if (!contextPrinted) {
-				parent.print(buildContext() + "\n");
-				contextPrinted = true;
-			}
 			for (Object message : messages) {
 				if (message instanceof String && !"}".equals(message)) {
 					message = "\t" + message;
+				}
+				boolean isRaw = message instanceof String && ((String) message).contains("{");
+				if (!contextPrinted && !isRaw) {
+					parent.print(buildContext() + "\n");
+					contextPrinted = true;
 				}
 				parent.print(message + "\n");
 			}
