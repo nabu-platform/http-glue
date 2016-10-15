@@ -926,13 +926,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	public static Device getDevice(String realm, Header...headers) {
 		Map<String, List<String>> cookies = HTTPUtils.getCookies(headers);
 		List<String> deviceId = cookies.get("Device-" + realm);
-		return deviceId == null || deviceId.isEmpty() ? null : new DeviceImpl(deviceId.get(0), GlueHTTPUtils.getUserAgent(headers), GlueHTTPUtils.getIp(headers));
+		return deviceId == null || deviceId.isEmpty() ? null : new DeviceImpl(deviceId.get(0), GlueHTTPUtils.getUserAgent(headers), GlueHTTPUtils.getHost(headers));
 	}
 	
 	public static Device newDevice(String realm, Header...headers) {
 		Map<String, List<String>> cookies = HTTPUtils.getCookies(headers);
 		List<String> deviceId = cookies.get("Device-" + realm);
-		return new DeviceImpl(deviceId == null || deviceId.isEmpty() ? UUID.randomUUID().toString().replace("-", "") : deviceId.get(0), GlueHTTPUtils.getUserAgent(headers), GlueHTTPUtils.getIp(headers));
+		return new DeviceImpl(deviceId == null || deviceId.isEmpty() ? UUID.randomUUID().toString().replace("-", "") : deviceId.get(0), GlueHTTPUtils.getUserAgent(headers), GlueHTTPUtils.getHost(headers));
 	}
 	
 	@SuppressWarnings({ "rawtypes" })

@@ -8,7 +8,7 @@ public class GlueHTTPUtils {
 	
 	public static String getHost(Header...headers) {
 		Header header = MimeUtils.getHeader(ServerHeader.REMOTE_HOST.getName(), headers);
-		return header == null ? null : header.getValue();
+		return header == null ? getIp(headers) : header.getValue();
 	}
 	
 	public static String getIp(Header...headers) {
