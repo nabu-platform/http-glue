@@ -135,7 +135,7 @@ public class UserMethods {
 					Token token = authenticator.authenticate(realm, new SharedSecretPrincipalImplementation(
 						secret, 
 						name,
-						new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getIp(RequestMethods.headers(null)))
+						new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getHost(RequestMethods.headers(null)))
 					));
 					if (token != null) {
 						SessionMethods.create(true);
@@ -248,7 +248,7 @@ public class UserMethods {
 			Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(
 				password, 
 				name, 
-				new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getIp(RequestMethods.headers(null)))
+				new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getHost(RequestMethods.headers(null)))
 			));
 			// if it's a new device, set a cookie for it
 			if (token != null && isNewDevice) {
