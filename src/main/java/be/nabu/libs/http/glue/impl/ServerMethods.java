@@ -15,6 +15,7 @@ public class ServerMethods {
 
 	public static final String ROOT_PATH = "rootPath";
 	public static final String METRICS = "metrics";
+	public static final String COOKIE_PATH = "cookiePath";
 	
 	public static MetricInstance metrics() {
 		return (MetricInstance) ScriptRuntime.getRuntime().getContext().get(METRICS);
@@ -45,6 +46,14 @@ public class ServerMethods {
 	
 	public static void error(String message) {
 		getLogger().error(message);
+	}
+	
+	public static String cookiePath() {
+		String path = (String) ScriptRuntime.getRuntime().getContext().get(COOKIE_PATH);
+		if (path == null) {
+			path = root();
+		}
+		return path;
 	}
 	
 	@GlueMethod(version = 1)

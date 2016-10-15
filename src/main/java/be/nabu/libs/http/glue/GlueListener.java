@@ -158,6 +158,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	
 	private List<CacheKeyProvider> cacheKeyProviders = new ArrayList<CacheKeyProvider>();
 	
+	private String cookiePath;
+	
 	/**
 	 * You can toggle this if you always want the user to have a session
 	 */
@@ -509,7 +511,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 							if (session != null && !session.getId().equals(originalSessionId)) {
 								// renew the session as well
 								ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
-								cookieHeader.addComment("Path=" + serverPath);
+								cookieHeader.addComment("Path=" + getCookiePath());
 								cookieHeader.addComment("HttpOnly");
 								response.getContent().setHeader(cookieHeader);
 							}
@@ -530,6 +532,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// set the context
 			runtime.getContext().put(RequestMethods.URL, uri);
 			runtime.getContext().put(ServerMethods.ROOT_PATH, serverPath);
+			runtime.getContext().put(ServerMethods.COOKIE_PATH, getCookiePath());
 			runtime.getContext().put(RequestMethods.ENTITY, request);
 			runtime.getContext().put(RequestMethods.GET, queryProperties);
 			runtime.getContext().put(RequestMethods.POST, formParameters);
@@ -582,7 +585,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// set a cookie for the session if it's a new session
 			if (session != null && !session.getId().equals(originalSessionId)) {
 				ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
-				cookieHeader.addComment("Path=" + serverPath);
+				cookieHeader.addComment("Path=" + getCookiePath());
 				cookieHeader.addComment("HttpOnly");
 				headers.add(cookieHeader);
 			}
@@ -639,7 +642,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					if (session == null) {
 						session = sessionProvider.newSession();
 						ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
-						cookieHeader.addComment("Path=" + serverPath);
+						cookieHeader.addComment("Path=" + getCookiePath());
 						cookieHeader.addComment("HttpOnly");
 						headers.add(cookieHeader);
 						runtime.getContext().put(SessionMethods.SESSION, session);
@@ -1417,4 +1420,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		}
 		
 	}
+
+	public String getCookiePath() {
+		return cookiePath == null ? serverPath : cookiePath;
+	}
+
+	public void setCookiePath(String cookiePath) {
+		this.cookiePath = cookiePath;
+	}
+	
 }

@@ -21,10 +21,8 @@ import be.nabu.libs.authentication.api.principals.SharedSecretPrincipal;
 import be.nabu.libs.authentication.impl.DeviceImpl;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.HTTPException;
-import be.nabu.libs.http.core.ServerHeader;
 import be.nabu.libs.http.glue.GlueListener;
 import be.nabu.libs.metrics.api.MetricInstance;
-import be.nabu.utils.mime.api.Header;
 
 @MethodProviderClass(namespace = "user")
 public class UserMethods {
@@ -168,7 +166,7 @@ public class UserMethods {
 				// set in the past
 				new Date(new Date().getTime() - 1000l*60*60*24),
 				// path
-				ServerMethods.root(), 
+				ServerMethods.cookiePath(), 
 				// domain
 				null, 
 				// secure
@@ -192,48 +190,21 @@ public class UserMethods {
 	
 	@GlueMethod(description = "Allows you to check if the current device is allowed for this account")
 	public static boolean device() {
-		Token token = token();
-		String realm = realm();
 		DeviceValidator deviceValidator = (DeviceValidator) ScriptRuntime.getRuntime().getContext().get(DEVICE_VALIDATOR);
-		if (token != null && deviceValidator != null) {
+		if (deviceValidator != null) {
+			String realm = realm();
+			Token token = token();
 			// devices are realm specific because you want the id to be globally unique
 			// a device may have been approved for use with realm 1 but not realm 2
 			// however the id is a primary key and is linked to exactly one user...which is linked to exactly one realm
 			String deviceId = RequestMethods.cookie("Device-" + realm);
 			boolean isNewDevice = false;
-			Header remoteAddress = RequestMethods.header(ServerHeader.REMOTE_ADDRESS.getName());
 			if (deviceId == null) {
-				Header userAgent = RequestMethods.header("User-Agent");
-				deviceId = deviceValidator.newDeviceId(token, remoteAddress == null ? null : remoteAddress.getValue(), userAgent == null ? null : userAgent.getValue());
+				deviceId = UUID.randomUUID().toString().replace("-", "");
 				isNewDevice = true;
 			}
-			Boolean allowed = deviceValidator.isAllowed(token, remoteAddress == null ? null : remoteAddress.getValue(), deviceId);
-			// the id is unknown
-			if (allowed == null) {
-				Header userAgent = RequestMethods.header("User-Agent");
-				deviceId = deviceValidator.newDeviceId(token, remoteAddress == null ? null : remoteAddress.getValue(), userAgent == null ? null : userAgent.getValue());
-				isNewDevice = true;
-			}
-			allowed = deviceValidator.isAllowed(token, remoteAddress == null ? null : remoteAddress.getValue(), deviceId);
-			if (allowed == null) {
-				// unset the cookie
-				ResponseMethods.cookie(
-					"Device-" + realm, 
-					"unknown", 
-					// Set it to 100 years in the future
-					new Date(new Date().getTime() - 1000l*60*60*24),
-					// path
-					ServerMethods.root(), 
-					// domain
-					null, 
-					// secure
-					(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
-					// http only
-					true
-				);
-				return false;
-			}
-			else if (!allowed) {
+			boolean allowed = deviceValidator.isAllowed(token, new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getIp(RequestMethods.headers(null))));
+			if (!allowed) {
 				return false;
 			}
 			// set a cookie to recognize device in the future
@@ -244,7 +215,7 @@ public class UserMethods {
 					// Set it to 100 years in the future
 					new Date(new Date().getTime() + 1000l*60*60*24*365*100),
 					// path
-					ServerMethods.root(), 
+					ServerMethods.cookiePath(), 
 					// domain
 					null, 
 					// secure
@@ -287,7 +258,7 @@ public class UserMethods {
 					// Set it to 100 years in the future
 					new Date(new Date().getTime() + 1000l*60*60*24*365*100),
 					// path
-					ServerMethods.root(), 
+					ServerMethods.cookiePath(), 
 					// domain
 					null, 
 					// secure
@@ -304,7 +275,7 @@ public class UserMethods {
 					// if there is no valid until in the token, set it to a year
 					token.getValidUntil() == null ? new Date(new Date().getTime() + 1000l*60*60*24*365) : token.getValidUntil(),
 					// path
-					ServerMethods.root(), 
+					ServerMethods.cookiePath(), 
 					// domain
 					null, 
 					// secure
