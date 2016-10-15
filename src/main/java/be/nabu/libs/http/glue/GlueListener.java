@@ -47,11 +47,13 @@ import be.nabu.glue.types.GlueTypeUtils;
 import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.glue.utils.ScriptUtils;
 import be.nabu.libs.authentication.api.Authenticator;
+import be.nabu.libs.authentication.api.Device;
 import be.nabu.libs.authentication.api.DeviceValidator;
 import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.RoleHandler;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.authentication.api.TokenValidator;
+import be.nabu.libs.authentication.impl.DeviceImpl;
 import be.nabu.libs.cache.api.Cache;
 import be.nabu.libs.cache.api.CacheEntry;
 import be.nabu.libs.cache.api.CacheProvider;
@@ -77,6 +79,7 @@ import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.libs.http.glue.api.CacheKeyProvider;
 import be.nabu.libs.http.glue.impl.GlueCSSFormatter;
 import be.nabu.libs.http.glue.impl.GlueHTTPFormatter;
+import be.nabu.libs.http.glue.impl.GlueHTTPUtils;
 import be.nabu.libs.http.glue.impl.RequestMethods;
 import be.nabu.libs.http.glue.impl.ResponseMethods;
 import be.nabu.libs.http.glue.impl.ServerMethods;
@@ -874,6 +877,18 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public static String getSessionId(Map<String, List<String>> cookies) {
 		return cookies == null || cookies.get(SESSION_COOKIE) == null || cookies.get(SESSION_COOKIE).isEmpty() ? null : cookies.get(SESSION_COOKIE).get(0);
+	}
+	
+	public static Device getDevice(String realm, Header...headers) {
+		Map<String, List<String>> cookies = HTTPUtils.getCookies(headers);
+		List<String> deviceId = cookies.get("Device-" + realm);
+		return deviceId == null || deviceId.isEmpty() ? null : new DeviceImpl(deviceId.get(0), GlueHTTPUtils.getUserAgent(headers), GlueHTTPUtils.getIp(headers));
+	}
+	
+	public static Device newDevice(String realm, Header...headers) {
+		Map<String, List<String>> cookies = HTTPUtils.getCookies(headers);
+		List<String> deviceId = cookies.get("Device-" + realm);
+		return new DeviceImpl(deviceId == null || deviceId.isEmpty() ? UUID.randomUUID().toString().replace("-", "") : deviceId.get(0), GlueHTTPUtils.getUserAgent(headers), GlueHTTPUtils.getIp(headers));
 	}
 	
 	@SuppressWarnings({ "rawtypes" })
