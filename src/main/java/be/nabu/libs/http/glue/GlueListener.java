@@ -349,15 +349,29 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				}
 			}
 			
+			String deviceId = null;
+			boolean isNewDevice = false;
+			// check validity of device
+			Device device = request.getContent() == null ? null : GlueListener.getDevice(realm, request.getContent().getHeaders());
+			if (device == null && deviceValidator != null) {
+				device = GlueListener.newDevice(realm, request.getContent().getHeaders());
+				deviceId = device.getDeviceId();
+				isNewDevice = true;
+			}
+			
+			if (deviceValidator != null && !deviceValidator.isAllowed(token, device)) {
+				throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' is using an unauthorized device '" + device.getDeviceId() + "' for '" + ScriptUtils.getFullName(script) + "'");
+			}
+			
 			// if we have root annotations, they may contain security annotations
 			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null) {
 				if (script.getRoot().getContext().getAnnotations().containsKey("role") && roleHandler != null
 						&& !checkRole(roleHandler, token, script.getRoot().getContext().getAnnotations().get("role"))) {
-					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required role for '" + ScriptUtils.getFullName(script));
+					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required role for '" + ScriptUtils.getFullName(script) + "'");
 				}
 				if (script.getRoot().getContext().getAnnotations().containsKey("permission") && permissionHandler != null
 						&& !checkPermission(permissionHandler, token, script.getRoot().getContext().getAnnotations().get("permission"), pathParameters)) {
-					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required permission for '" + ScriptUtils.getFullName(script));
+					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required permission for '" + ScriptUtils.getFullName(script) + "'");
 				}
 			}
 
@@ -516,6 +530,21 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 								ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
 								cookieHeader.addComment("Path=" + getCookiePath());
 								cookieHeader.addComment("HttpOnly");
+								response.getContent().setHeader(cookieHeader);
+							}
+							if (isNewDevice) {
+								ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(
+									"Device-" + realm, 
+									deviceId,
+									new Date(new Date().getTime() + 1000l*60*60*24*365*100),
+									getCookiePath(),
+									// domain
+									null, 
+									// secure TODO?
+									false,
+									// http only
+									true
+								);
 								response.getContent().setHeader(cookieHeader);
 							}
 							// set etags to identify the cached instance
@@ -694,6 +723,21 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				else {
 					headers.add(new MimeHeader("Content-Length", byteContent == null ? "0" : Integer.valueOf(byteContent.length).toString()));
 				}
+			}
+			if (isNewDevice) {
+				ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(
+					"Device-" + realm, 
+					deviceId,
+					new Date(new Date().getTime() + 1000l*60*60*24*365*100),
+					getCookiePath(),
+					// domain
+					null, 
+					// secure TODO?
+					false,
+					// http only
+					true
+				);
+				headers.add(cookieHeader);
 			}
 			ModifiablePart part;
 			if (stream != null) {
