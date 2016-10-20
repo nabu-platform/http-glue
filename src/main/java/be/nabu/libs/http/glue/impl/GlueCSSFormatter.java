@@ -32,7 +32,7 @@ import be.nabu.glue.api.runs.GlueValidation;
 public class GlueCSSFormatter implements OutputFormatter {
 
 	private Stack<Executor> context = new Stack<Executor>();
-	private boolean contextPrinted;
+	private boolean contextPrinted, mediaPrinted;
 	
 	private static List<String> singleQuoteStates = Arrays.asList(new String [] { "active", "checked", "disabled", "empty", "enabled", "first-child", "first-of-type", "focus", "hover", 
 			"in-range", "invalid", "lang", "last-child", "last-of-type", "link", "not", "nth-child", "nth-last-child", "nth-last-of-type", "nth-of-type", "only-of-type", "only-child", 
@@ -59,11 +59,19 @@ public class GlueCSSFormatter implements OutputFormatter {
 	public void before(Executor executor) {
 		if (!(executor instanceof AssignmentExecutor) && executor instanceof ExecutorGroup && executor.getContext() != null && executor.getContext().getAnnotations() != null) {
 			Map<String, String> annotations = executor.getContext().getAnnotations();
-			if (hasContext(annotations)) {
+			if (hasContext(annotations) || annotations.containsKey("media")) {
 				if (contextPrinted) {
 					print("}", "");
+					contextPrinted = false;
 				}
-				contextPrinted = false;
+				if (annotations.containsKey("media")) {
+					if (mediaPrinted) {
+						parent.print("}\n");
+						mediaPrinted = false;
+					}
+					parent.print("@media " + executor.getContext().getAnnotations().get("media").trim() + " {\n");
+					mediaPrinted = true;
+				}
 				context.push(executor);
 			}
 		}
@@ -79,6 +87,10 @@ public class GlueCSSFormatter implements OutputFormatter {
 				// we have to print the "new" context again
 				contextPrinted = false;
 			}
+			if (mediaPrinted && executor.getContext().getAnnotations().containsKey("media")) {
+				parent.print("}\n");
+				mediaPrinted = false;
+			}
 			context.pop();
 		}
 		parent.after(executor);
@@ -93,10 +105,10 @@ public class GlueCSSFormatter implements OutputFormatter {
 				}
 				boolean isRaw = message instanceof String && ((String) message).contains("{");
 				if (!contextPrinted && !isRaw) {
-					parent.print(buildContext() + "\n");
+					parent.print((mediaPrinted ? "\t" : "") + buildContext() + "\n");
 					contextPrinted = true;
 				}
-				parent.print(message + "\n");
+				parent.print((mediaPrinted ? "\t" : "") + message + "\n");
 			}
 		}
 	}
@@ -272,7 +284,7 @@ public class GlueCSSFormatter implements OutputFormatter {
 				first = false;
 			}
 			else if (executor.getContext().getAnnotations().get("append") != null) {
-				builder.append(executor.getContext().getAnnotations().get("append").trim());
+				builder.append(executor.getContext().getAnnotations().get("append").replaceAll("[\\s]+$", ""));
 			}
 			else if (!"self".equals(executor.getContext().getAnnotations().get("relation"))) {
 				builder.append(" ");

@@ -32,6 +32,7 @@ public class GlueCSSParser extends GlueParser {
 		String stateRegex = "^([\\s]*)[:]+(.*)";
 		String elementRegex = "^([\\s]*)\\$(.*)";
 		String appendRegex = "^([\\s]*)&(.*)";
+		String mediaRegex = "^([\\s]*)@media[\\s]+(.*)";
 		for (String line : IOUtils.toString(IOUtils.wrap(reader)).replace("\r", "").split("[\n\r]+")) {
 			if (line.contains("}")) {
 				bracketCount--;
@@ -88,6 +89,12 @@ public class GlueCSSParser extends GlueParser {
 					whitespace = line.replaceFirst(appendRegex, "$1");
 				}
 				builder.append(whitespace).append(line.replaceFirst(appendRegex, "@append $2")).append("\n");
+			}
+			else if (line.matches(mediaRegex)) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(mediaRegex, "$1").replace("\"", "\\\"");
+				}
+				builder.append(whitespace).append(line.replaceFirst(mediaRegex, "@media $2")).append("\n");
 			}
 			else if (line.matches(statementRegex)) {
 				if (bracketCount == 0) {
