@@ -28,12 +28,16 @@ import be.nabu.libs.metrics.api.MetricInstance;
 public class UserMethods {
 
 	public static final class SharedSecretPrincipalImplementation implements SharedSecretPrincipal, DevicePrincipal {
-		private final String secret;
-		private final String name;
+		private String secret;
+		private String name;
 		private static final long serialVersionUID = 1L;
 		private Device device;
 
-		private SharedSecretPrincipalImplementation(String secret, String name, Device device) {
+		public SharedSecretPrincipalImplementation() {
+			// auto construct
+		}
+		
+		public SharedSecretPrincipalImplementation(String secret, String name, Device device) {
 			this.secret = secret;
 			this.name = name;
 			this.device = device;
@@ -53,16 +57,31 @@ public class UserMethods {
 		public Device getDevice() {
 			return device;
 		}
-		
+
+		public void setDevice(Device device) {
+			this.device = device;
+		}
+
+		public void setSecret(String secret) {
+			this.secret = secret;
+		}
+
+		public void setName(String name) {
+			this.name = name;
+		}
 	}
 
 	public static final class BasicPrincipalImplementation implements BasicPrincipal, DevicePrincipal {
-		private final String password;
-		private final String name;
+		private String password;
+		private String name;
 		private static final long serialVersionUID = 1L;
 		private Device device;
 
-		private BasicPrincipalImplementation(String password, String name, Device device) {
+		public BasicPrincipalImplementation() {
+			// auto construct
+		}
+		
+		public BasicPrincipalImplementation(String password, String name, Device device) {
 			this.password = password;
 			this.name = name;
 			this.device = device;
@@ -82,6 +101,19 @@ public class UserMethods {
 		public Device getDevice() {
 			return device;
 		}
+
+		public void setPassword(String password) {
+			this.password = password;
+		}
+
+		public void setName(String name) {
+			this.name = name;
+		}
+
+		public void setDevice(Device device) {
+			this.device = device;
+		}
+		
 	}
 
 	public static final String SSL_ONLY_SECRET = "sslOnlySecret";

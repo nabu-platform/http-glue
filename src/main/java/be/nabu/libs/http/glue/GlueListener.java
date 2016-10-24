@@ -384,9 +384,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// scan all inputs, check for annotations to indicate what you might want
 			@SuppressWarnings("rawtypes")
 			Map formParameters = null;
-			if (request.getContent() instanceof ParsedMimeFormPart && !noCsrf) {
+			if (request.getContent() instanceof ParsedMimeFormPart) {
 				formParameters = ((ParsedMimeFormPart) request.getContent()).getValues();
-				if (formParameters != null && addCsrfCheck) {
+				if (formParameters != null && addCsrfCheck && !noCsrf) {
 					if (originalSessionId == null) {
 						logger.warn("Possible CSRF attack: client did not pass in required session id");
 						throw new HTTPException(500, "CSRF check failed, no session passed in client");
@@ -666,7 +666,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				charset = (Charset) runtime.getContext().get(ResponseMethods.RESPONSE_DEFAULT_CHARSET);
 			}
 			String stringContent = writer.toString().trim();
-			if (addCsrfCheck) {
+			if (addCsrfCheck && !noCsrf) {
 				int formPosition = getFormPosition(stringContent);
 				if (formPosition >= 0) {
 					// forcibly create a session if csrf checks are required
