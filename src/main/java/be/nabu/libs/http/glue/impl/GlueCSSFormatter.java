@@ -41,6 +41,8 @@ public class GlueCSSFormatter implements OutputFormatter {
 	private static List<String> doubleQuoteStates = Arrays.asList(new String [] { "after", "before", "first-letter", "first-line"  });
 	private OutputFormatter parent;
 	
+	private Script root;
+	
 	public GlueCSSFormatter(OutputFormatter parent) {
 		this.parent = parent;
 	}
@@ -341,6 +343,9 @@ public class GlueCSSFormatter implements OutputFormatter {
 
 	@Override
 	public void start(Script script) {
+		if (root == null) {
+			root = script;
+		}
 		parent.start(script);		
 	}
 
@@ -351,6 +356,17 @@ public class GlueCSSFormatter implements OutputFormatter {
 
 	@Override
 	public void end(Script script, Date started, Date stopped, Exception exception) {
+		if (root != null && root.equals(script)) {
+			if (contextPrinted) {
+				print("}", "");
+				// we have to print the "new" context again
+				contextPrinted = false;
+			}
+			if (mediaPrinted) {
+				parent.print("}\n");
+				mediaPrinted = false;
+			}
+		}
 		parent.end(script, started, stopped, exception);		
 	}
 

@@ -21,7 +21,7 @@ public class GlueCSSParser extends GlueParser {
 	@Override
 	public ExecutorGroup parse(Reader reader) throws IOException, ParseException {
 		StringBuilder builder = new StringBuilder();
-		builder.append("@css\n\n");
+		builder.append("@css\n");
 		int bracketCount = 0;
 		String whitespace = "";
 		String statementRegex = "^([\\s]*)([\\w-]+[\\s]*:[\\s]*.*)";
@@ -33,6 +33,7 @@ public class GlueCSSParser extends GlueParser {
 		String elementRegex = "^([\\s]*)\\$(.*)";
 		String appendRegex = "^([\\s]*)&(.*)";
 		String mediaRegex = "^([\\s]*)@media[\\s]+(.*)";
+		boolean isFirstLine = true;
 		for (String line : IOUtils.toString(IOUtils.wrap(reader)).replace("\r", "").split("[\n\r]+")) {
 			if (line.contains("}")) {
 				bracketCount--;
@@ -41,6 +42,11 @@ public class GlueCSSParser extends GlueParser {
 			}
 			else if (line.trim().isEmpty()) {
 				continue;
+			}
+			// add an additional line feed after possible initial stuff
+			else if (isFirstLine && !line.trim().startsWith("@") && !line.trim().startsWith("#")) {
+				isFirstLine = false;
+				builder.append("\n");
 			}
 			boolean isBlock = line.contains("{");
 			if (isBlock) {
