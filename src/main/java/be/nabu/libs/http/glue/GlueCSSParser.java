@@ -114,7 +114,6 @@ public class GlueCSSParser extends GlueParser {
 				if (!line.endsWith(";")) {
 					builder.append(";");
 				}
-				System.out.println("THE LINE IS: " + line.replaceFirst(statementRegex, "$2").replace("\"", "\\\""));
 				builder.append("\"))\n");
 			}
 			else if (!isBlock) {
