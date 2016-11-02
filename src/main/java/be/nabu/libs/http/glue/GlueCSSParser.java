@@ -35,7 +35,7 @@ public class GlueCSSParser extends GlueParser {
 		String mediaRegex = "^([\\s]*)@media[\\s]+(.*)";
 		boolean isFirstLine = true;
 		for (String line : IOUtils.toString(IOUtils.wrap(reader)).replace("\r", "").split("[\n\r]+")) {
-			if (line.contains("}")) {
+			if (line.contains("}") && !line.contains("${")) {
 				bracketCount--;
 				whitespace = tabs(bracketCount);
 				continue;
@@ -48,7 +48,7 @@ public class GlueCSSParser extends GlueParser {
 				isFirstLine = false;
 				builder.append("\n");
 			}
-			boolean isBlock = line.contains("{");
+			boolean isBlock = line.contains("{") && !line.contains("${");
 			if (isBlock) {
 				line = line.replace("{", "");
 			}
@@ -114,6 +114,7 @@ public class GlueCSSParser extends GlueParser {
 				if (!line.endsWith(";")) {
 					builder.append(";");
 				}
+				System.out.println("THE LINE IS: " + line.replaceFirst(statementRegex, "$2").replace("\"", "\\\""));
 				builder.append("\"))\n");
 			}
 			else if (!isBlock) {
