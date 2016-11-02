@@ -122,6 +122,12 @@ public class GlueCSSParser extends GlueParser {
 				}
 				builder.append(whitespace).append(line.replaceFirst("^[\\s]*", "")).append("\n");
 			}
+			else {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst("^([\\s]*).*", "$1");
+				}
+				builder.append(whitespace).append("@select " + line.replaceFirst("[\\s]*", "")).append("\n");
+			}
 			if (isBlock) {
 				builder.append(whitespace).append("sequence\n");
 				bracketCount++;
