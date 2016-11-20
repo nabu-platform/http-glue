@@ -105,7 +105,7 @@ public class GlueCSSFormatter implements OutputFormatter {
 				if (message instanceof String && !"}".equals(message)) {
 					message = "\t" + message;
 				}
-				boolean isRaw = message instanceof String && ((String) message).contains("{");
+				boolean isRaw = message instanceof String && (((String) message).contains("{") || ((String) message).trim().isEmpty());
 				if (!contextPrinted && !isRaw) {
 					parent.print((mediaPrinted ? "\t" : "") + buildContext() + "\n");
 					contextPrinted = true;
