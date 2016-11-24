@@ -339,6 +339,9 @@ public class UserMethods {
 	public static boolean authenticated() {
 		String realm = realm();
 		Token token = (Token) SessionMethods.get(GlueListener.buildTokenName(realm));
+		if (token == null && ScriptRuntime.getRuntime().getExecutionContext().getPrincipal() instanceof Token) {
+			token = (Token) ScriptRuntime.getRuntime().getExecutionContext().getPrincipal();
+		}
 		TokenValidator validator = (TokenValidator) ScriptRuntime.getRuntime().getContext().get(TOKEN_VALIDATOR);
 		return token != null && ((validator == null && (token.getValidUntil() == null || token.getValidUntil().after(new Date()))) || validator.isValid(token));
 	}
