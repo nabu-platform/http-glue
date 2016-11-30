@@ -6,6 +6,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Stack;
+import java.util.regex.Matcher;
 
 import be.nabu.glue.api.AssignmentExecutor;
 import be.nabu.glue.api.Executor;
@@ -136,6 +137,7 @@ public class GlueCSSFormatter implements OutputFormatter {
 			String stateModifier = this.stateModifier == null ? null : this.stateModifier;
 			if (executor.getContext().getAnnotations().get("append") != null) {
 				current += executor.getContext().getAnnotations().get("append");
+				current = current.replaceAll("([\\s]*,)", Matcher.quoteReplacement(executor.getContext().getAnnotations().get("append")) + "$1");
 			}
 			else if (!"self".equals(executor.getContext().getAnnotations().get("relation"))) {
 				if (stateModifier != null) {
