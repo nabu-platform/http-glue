@@ -593,6 +593,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("css")) {
 				((SimpleOutputFormatter) buffer).setReplaceVariables(true);
 				buffer = new GlueCSSFormatter(buffer);
+				((GlueCSSFormatter) buffer).setAutoprefix(!script.getRoot().getContext().getAnnotations().containsKey("autoprefix") || "true".equals(script.getRoot().getContext().getAnnotations().get("autoprefix")));
 				headersToAdd.add(new MimeHeader("Content-Type", "text/css"));
 			}
 			// wrap validation around it

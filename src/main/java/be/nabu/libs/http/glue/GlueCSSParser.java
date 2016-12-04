@@ -22,6 +22,7 @@ public class GlueCSSParser extends GlueParser {
 	public ExecutorGroup parse(Reader reader) throws IOException, ParseException {
 		StringBuilder builder = new StringBuilder();
 		builder.append("@css\n");
+		builder.append("@autoprefix false");
 		int bracketCount = 0;
 		String whitespace = "";
 		String statementRegex = "^([\\s]*)([\\w-]+[\\s]*:[\\s]*.*)";
@@ -69,7 +70,6 @@ public class GlueCSSParser extends GlueParser {
 					whitespace = line.replaceFirst(attributeRegex, "$1");
 				}
 				// the ending bracket is optional
-				line = line.replace("]", "");
 				builder.append(whitespace).append(line.replaceFirst(attributeRegex, "@attribute $2")).append("\n");
 			}
 			else if (line.matches(classRegex)) {
@@ -102,7 +102,7 @@ public class GlueCSSParser extends GlueParser {
 				}
 				builder.append(whitespace).append(line.replaceFirst(mediaRegex, "@media $2")).append("\n");
 			}
-			else if (line.matches(statementRegex)) {
+			else if (line.matches(statementRegex) && !isBlock) {
 				if (bracketCount == 0) {
 					whitespace = line.replaceFirst(statementRegex, "$1");
 				}

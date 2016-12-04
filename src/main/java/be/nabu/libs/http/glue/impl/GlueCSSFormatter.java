@@ -41,6 +41,7 @@ public class GlueCSSFormatter implements OutputFormatter {
 	
 	private static List<String> doubleQuoteStates = Arrays.asList(new String [] { "after", "before", "first-letter", "first-line"  });
 	private OutputFormatter parent;
+	private boolean autoprefix = true;
 	
 	private Script root;
 	
@@ -116,7 +117,7 @@ public class GlueCSSFormatter implements OutputFormatter {
 		}
 	}
 	
-	public static class CSSContext {
+	public class CSSContext {
 		private String current;
 		private String stateModifier;
 		public CSSContext() {
@@ -224,8 +225,17 @@ public class GlueCSSFormatter implements OutputFormatter {
 			}
 			else {
 				for (String single : current) {
+					// the first always has to be autofixed!
+					boolean first = true;
 					for (String newCurrent : newCurrents) {
-						result.add(single + prefix + newCurrent + postFix);
+						if ((first || autoprefix) && !newCurrent.startsWith(prefix)) {
+							newCurrent = prefix + newCurrent;
+						}
+						if ((first || autoprefix) && !postFix.isEmpty() && !newCurrent.endsWith(postFix)) {
+							newCurrent += postFix;
+						}
+						result.add(single + newCurrent);
+						first = false;
 					}
 				}
 			}
@@ -376,4 +386,13 @@ public class GlueCSSFormatter implements OutputFormatter {
 	public boolean shouldExecute(Executor executor) {
 		return parent.shouldExecute(executor);
 	}
+
+	public boolean isAutoprefix() {
+		return autoprefix;
+	}
+
+	public void setAutoprefix(boolean autoprefix) {
+		this.autoprefix = autoprefix;
+	}
+	
 }
