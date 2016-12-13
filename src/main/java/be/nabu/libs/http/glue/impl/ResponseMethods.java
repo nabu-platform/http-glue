@@ -245,7 +245,7 @@ public class ResponseMethods {
 	
 	@SuppressWarnings("unchecked")
 	public static Header cache(
-			@GlueParam(name = "maxAge", description = "How long the cache should live, use '0' to indicate that it should not be cached and null to cache indefinately") Long maxAge, 
+			@GlueParam(name = "maxAge", description = "How long the cache should live, use '-1' to indicate that it should not be cached and null or 0 to cache indefinately") Long maxAge, 
 			@GlueParam(name = "revalidate", description = "Whether or not the cached data should be revalidated", defaultValue = "false") Boolean revalidate, 
 			@GlueParam(name = "private", description = "Whether or not the cache is private", defaultValue = "false") Boolean isPrivate) throws ParseException, IOException {
 		Header header = GlueListener.buildCacheHeader(maxAge, revalidate, isPrivate);

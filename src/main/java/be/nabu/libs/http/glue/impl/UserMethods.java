@@ -352,7 +352,7 @@ public class UserMethods {
 		Token token = (Token) SessionMethods.get(GlueListener.buildTokenName(realm));
 		RoleHandler handler = (RoleHandler) ScriptRuntime.getRuntime().getContext().get(ROLE_HANDLER);
 		// the token can be null, in that case the role handler is supposed to check for anonymous access
-		return handler != null && handler.hasRole(token, role);
+		return handler == null || handler.hasRole(token, role);
 	}
 	
 	@GlueMethod(description = "Checks if a user has permission to do something")

@@ -22,7 +22,7 @@ public class GlueCSSParser extends GlueParser {
 	public ExecutorGroup parse(Reader reader) throws IOException, ParseException {
 		StringBuilder builder = new StringBuilder();
 		builder.append("@css\n");
-		builder.append("@autoprefix false");
+		builder.append("@autoprefix false\n");
 		int bracketCount = 0;
 		String whitespace = "";
 		String statementRegex = "^([\\s]*)([\\w-]+[\\s]*:[\\s]*.*)";

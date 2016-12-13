@@ -378,7 +378,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			boolean noCsrf = (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("nocsrf"));
 			String csrfAnnotation = script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null ? script.getRoot().getContext().getAnnotations().get("csrf") : null;
 			if (csrfAnnotation != null) {
-				noCsrf = csrfAnnotation.equalsIgnoreCase("none");
+				noCsrf = csrfAnnotation.equalsIgnoreCase("none") || csrfAnnotation.equalsIgnoreCase("false");
 			}
 			Map<String, Object> input = new HashMap<String, Object>();
 			// scan all inputs, check for annotations to indicate what you might want
@@ -1349,7 +1349,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	
 	public static Header buildCacheHeader(Long maxAge, Boolean revalidate, Boolean isPrivate) {
 		// this indicates that it should not be cached
-		if (maxAge != null && maxAge == 0) {
+		if (maxAge != null && maxAge < 0) {
 			return new MimeHeader("Cache-Control", "no-store, no-cache");
 		}
 		else {
