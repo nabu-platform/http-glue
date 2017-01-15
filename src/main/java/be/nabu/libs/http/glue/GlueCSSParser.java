@@ -49,9 +49,10 @@ public class GlueCSSParser extends GlueParser {
 				isFirstLine = false;
 				builder.append("\n");
 			}
-			boolean isBlock = line.contains("{") && !line.contains("${");
+			// if after removal of glue blocks, you still have a "{", it is a block statement
+			boolean isBlock = line.replaceAll("\\$\\{[^}]*\\}", "").contains("{");
 			if (isBlock) {
-				line = line.replace("{", "");
+				line = line.replaceAll("(?<!\\$)\\{", "");
 			}
 			if (line.matches(commentRegex)) {
 				if (bracketCount == 0) {
