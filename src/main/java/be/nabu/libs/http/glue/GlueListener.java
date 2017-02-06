@@ -194,6 +194,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private boolean addCsrfCheck = true;
 	
 	/**
+	 * Whether or not to add automatic fix for tab nabbing (https://en.wikipedia.org/wiki/Tabnabbing)
+	 * In short tab nabbing abuses target="_blank" links that (by default) open with window.opener being a reference to the original window.
+	 * This allows the new tab to rewrite the old window with for example a fake login page.
+	 */
+	private boolean addTabNabbingPrevention = true;
+	
+	/**
 	 * Whether or not the scripts have to match by full name or also simple name
 	 */
 	private boolean requireFullName = true;
@@ -282,19 +289,17 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					int index = scriptPath.lastIndexOf('.');
 					scriptPath = scriptPath.substring(0, index);
 					Script possibleScript = repository.getScript(scriptPath);
-					if (possibleScript != null) {
-						if (possibleScript.getRoot().getContext().getAnnotations().containsKey("path")) {
-							String pathValue = possibleScript.getRoot().getContext().getAnnotations().get("path");
-							if (!pathAnalysis.containsKey(pathValue)) {
-								pathAnalysis.put(pathValue, analyzePath(pathValue));
-							}
-							// the +1 is to also skip the "." after the script name
-							String remainingPath = path.substring(scriptPath.length() + 1).replace('.', '/');
-							Map<String, String> analyze = pathAnalysis.get(pathValue).analyze(remainingPath);
-							if (analyze != null) {
-								script = possibleScript;
-								pathParameters.putAll(analyze);
-							}
+					if (possibleScript != null && possibleScript.getRoot() != null && possibleScript.getRoot().getContext() != null && possibleScript.getRoot().getContext().getAnnotations() != null && possibleScript.getRoot().getContext().getAnnotations().containsKey("path")) {
+						String pathValue = possibleScript.getRoot().getContext().getAnnotations().get("path");
+						if (!pathAnalysis.containsKey(pathValue)) {
+							pathAnalysis.put(pathValue, analyzePath(pathValue));
+						}
+						// the +1 is to also skip the "." after the script name
+						String remainingPath = path.substring(scriptPath.length() + 1).replace('.', '/');
+						Map<String, String> analyze = pathAnalysis.get(pathValue).analyze(remainingPath);
+						if (analyze != null) {
+							script = possibleScript;
+							pathParameters.putAll(analyze);
 						}
 						break;
 					}
@@ -380,6 +385,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (csrfAnnotation != null) {
 				noCsrf = csrfAnnotation.equalsIgnoreCase("none") || csrfAnnotation.equalsIgnoreCase("false");
 			}
+			
+			boolean noTabNabbingPrevention = (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("norel"));
+			String relAnnotation = script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null ? script.getRoot().getContext().getAnnotations().get("rel") : null;
+			if (relAnnotation != null) {
+				noTabNabbingPrevention = relAnnotation.equalsIgnoreCase("none") || relAnnotation.equalsIgnoreCase("false");
+			}
+			
 			Map<String, Object> input = new HashMap<String, Object>();
 			// scan all inputs, check for annotations to indicate what you might want
 			@SuppressWarnings("rawtypes")
@@ -409,7 +421,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					}
 					// if you define the token as being single use, remove the token now that it has been used so it can only be used once
 					// this is interesting for more sensitive pages like login pages etc
-					else if ("single".equals(csrfAnnotation)) {
+					else if ("single".equals(relAnnotation)) {
 						session.set(CSRF_TOKEN, null);
 					}
 				}
@@ -687,6 +699,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					stringContent = addCsrfCheck(session, stringContent, formPosition);
 				}
 			}
+			if (addTabNabbingPrevention && !noTabNabbingPrevention) {
+				stringContent = addTabNabbingPrevention(stringContent, -1);
+			}
 			if (!stringContent.isEmpty()) {
 				for (ContentRewriter rewriter : contentRewriters) {
 					stringContent = rewriter.rewrite(stringContent, contentType == null ? "text/html" : contentType.getValue());
@@ -915,6 +930,25 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				session.set(CSRF_TOKEN, token);
 				// add to other forms (if multiple)
 				return addCsrfCheck(session, stringContent, endIndex + 1);
+			}
+		}
+		return stringContent;
+	}
+	
+	private static String addTabNabbingPrevention(String stringContent, int offset) {
+		if (stringContent != null && !stringContent.isEmpty()) {
+			int startIndex = stringContent.indexOf("<a", offset);
+			if (startIndex >= 0) {
+				int endIndex = stringContent.indexOf('>', startIndex);
+				String substring = stringContent.substring(startIndex, endIndex + 1);
+				// we check if the string '_blank' is in there, it should only be for the 'target'
+				// we don't explicitly check that it is not for example an 'article' tag, because we assume the string '_blank' will only occur in 'a' tags
+				if (substring.contains("_blank") && !substring.contains("rel")) {
+					String quote = substring.contains("\"") ? "\"" : "'";
+					stringContent = stringContent.substring(0, endIndex) + " rel=" + quote + "noopener noreferrer nofollow" + quote + stringContent.substring(endIndex);
+				}
+				// add to other forms (if multiple)
+				return addTabNabbingPrevention(stringContent, endIndex + 1);
 			}
 		}
 		return stringContent;

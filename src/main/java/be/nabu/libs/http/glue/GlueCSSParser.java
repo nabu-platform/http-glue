@@ -36,7 +36,7 @@ public class GlueCSSParser extends GlueParser {
 		String mediaRegex = "^([\\s]*)@media[\\s]+(.*)";
 		boolean isFirstLine = true;
 		for (String line : IOUtils.toString(IOUtils.wrap(reader)).replace("\r", "").split("[\n\r]+")) {
-			if (line.contains("}") && !line.contains("${")) {
+			if (line.trim().endsWith("}") && !line.contains("${")) {
 				bracketCount--;
 				whitespace = tabs(bracketCount);
 				continue;
@@ -50,7 +50,7 @@ public class GlueCSSParser extends GlueParser {
 				builder.append("\n");
 			}
 			// if after removal of glue blocks, you still have a "{", it is a block statement
-			boolean isBlock = line.replaceAll("\\$\\{[^}]*\\}", "").contains("{");
+			boolean isBlock = line.replaceAll("\\$\\{[^}]*\\}", "").trim().endsWith("{");
 			if (isBlock) {
 				line = line.replaceAll("(?<!\\$)\\{", "");
 			}
