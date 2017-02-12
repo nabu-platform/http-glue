@@ -12,6 +12,7 @@ import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.api.HTTPRequest;
 import be.nabu.libs.http.api.LinkableHTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
+import be.nabu.libs.resources.URIUtils;
 import be.nabu.utils.mime.api.Header;
 import be.nabu.utils.mime.impl.FormatException;
 import be.nabu.utils.mime.impl.MimeUtils;
@@ -95,7 +96,7 @@ public class RequestMethods {
 				path = ServerMethods.root() + path;
 			}
 			try {
-				return new URI(uri.getScheme() + "://" + uri.getAuthority() + path);
+				return new URI(uri.getScheme() + "://" + uri.getAuthority() + URIUtils.encodeURI(path));
 			}
 			catch (URISyntaxException e) {
 				throw new RuntimeException(e);
