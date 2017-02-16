@@ -6,7 +6,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Stack;
-import java.util.regex.Matcher;
 
 import be.nabu.glue.api.AssignmentExecutor;
 import be.nabu.glue.api.Executor;
@@ -136,9 +135,13 @@ public class GlueCSSFormatter implements OutputFormatter {
 		public List<CSSContext> push(Executor executor) {
 			String current = this.current == null ? "" : this.current;
 			String stateModifier = this.stateModifier == null ? null : this.stateModifier;
+			List<String> newCurrent = new ArrayList<String>();
+
 			if (executor.getContext().getAnnotations().get("append") != null) {
-				current += executor.getContext().getAnnotations().get("append");
-				current = current.replaceAll("([\\s]*,)", Matcher.quoteReplacement(executor.getContext().getAnnotations().get("append")) + "$1");
+//				current += executor.getContext().getAnnotations().get("append");
+				newCurrent.add(current.replaceAll("([\\s]*,)", ""));
+				newCurrent = multiply(newCurrent, "", "", executor.getContext().getAnnotations().get("append").split("[\\s]*,[\\s]*"));
+//				current = current.replaceAll("([\\s]*,)", Matcher.quoteReplacement(executor.getContext().getAnnotations().get("append")) + "$1");
 			}
 			else if (!"self".equals(executor.getContext().getAnnotations().get("relation"))) {
 				if (stateModifier != null) {
@@ -166,8 +169,10 @@ public class GlueCSSFormatter implements OutputFormatter {
 					current += relation + " ";
 				}
 			}
-			List<String> newCurrent = new ArrayList<String>();
-			newCurrent.add(current);
+			if (newCurrent.isEmpty()) {
+				newCurrent.add(current);
+			}
+			
 			List<String> newState = new ArrayList<String>();
 			if (stateModifier != null) {
 				newState.add(stateModifier);
@@ -187,13 +192,15 @@ public class GlueCSSFormatter implements OutputFormatter {
 			else if (executor.getContext().getAnnotations().get("state") != null) {
 				String [] states = executor.getContext().getAnnotations().get("state").trim().toLowerCase().split("[\\s]*,[\\s]*");
 				for (int i = 0; i < states.length; i++) {
+					// just in case someone had a leading ":", remove it
+					String state = states[i].replaceFirst("^[:]+", "");
 					// a state can have functions like lang(en)
-					String baseState = states[i].replaceAll("^([\\w-]+).*", "$1");
+					String baseState = state.replaceAll("^([\\w-]+).*", "$1");
 					if (singleQuoteStates.contains(baseState)) {
-						states[i] = ":" + states[i];
+						states[i] = ":" + state;
 					}
 					else if (doubleQuoteStates.contains(baseState)) {
-						states[i] = "::" + states[i];
+						states[i] = "::" + state;
 					}
 					else {
 						throw new IllegalArgumentException("Unknown state: " + baseState);

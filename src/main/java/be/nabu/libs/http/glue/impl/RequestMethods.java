@@ -10,6 +10,7 @@ import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.api.HTTPRequest;
+import be.nabu.libs.http.api.HTTPResponse;
 import be.nabu.libs.http.api.LinkableHTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.libs.resources.URIUtils;
@@ -69,6 +70,14 @@ public class RequestMethods {
 			request = ((LinkableHTTPResponse) content()).getRequest();
 		}
 		return request == null ? null : request.getTarget();
+	}
+	
+	public static Integer code() {
+		HTTPResponse response = null;
+		if (content() instanceof HTTPResponse) {
+			response = (HTTPResponse) content();
+		}
+		return response == null ? null : response.getCode();
 	}
 	
 	public static double version() {
