@@ -6,6 +6,8 @@ import java.util.UUID;
 
 import be.nabu.glue.annotations.GlueMethod;
 import be.nabu.glue.annotations.GlueParam;
+import be.nabu.glue.api.ExecutionContext;
+import be.nabu.glue.api.SecurityUpgradeable;
 import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.Device;
@@ -172,6 +174,10 @@ public class UserMethods {
 					if (token != null) {
 						SessionMethods.create(true);
 						SessionMethods.set(GlueListener.buildTokenName(realm), token);
+						ExecutionContext context = ScriptRuntime.getRuntime() == null ? null : ScriptRuntime.getRuntime().getExecutionContext();
+						if (context instanceof SecurityUpgradeable) {
+							((SecurityUpgradeable) context).setPrincipal(token);
+						}
 						return true;
 					}
 					else {
@@ -320,6 +326,10 @@ public class UserMethods {
 			if (token != null) {
 				SessionMethods.create(true);
 				SessionMethods.set(GlueListener.buildTokenName(realm), token);
+				ExecutionContext context = ScriptRuntime.getRuntime() == null ? null : ScriptRuntime.getRuntime().getExecutionContext();
+				if (context instanceof SecurityUpgradeable) {
+					((SecurityUpgradeable) context).setPrincipal(token);
+				}
 				return true;
 			}
 			else {
