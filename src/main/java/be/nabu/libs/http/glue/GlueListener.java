@@ -201,6 +201,22 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private boolean addTabNabbingPrevention = true;
 	
 	/**
+	 * Basically a click jacking is where people load your page into an iframe and layer custom content on top of it
+	 * If you click on the custom content and it doesn't handle the click, it bleeds through to the iframe underneath
+	 * If positioned correctly, it can manipulate the user into doing stuff he doesn't want to
+	 * The best defense against this is to prevent putting a site in frames
+	 * This can be done using X-Frame-Options header
+	 * There are three options:
+	 * 
+	 * - DENY: no frames
+	 * - SAMEORIGIN: allow frames from same origin
+	 * - ALLOW-FROM https://example.com : whitelist
+	 * 
+	 * Because frames are seriously dated, the default here is to deny
+	 */
+	private boolean addClickJackingPrevention = true;
+	
+	/**
 	 * Whether or not the scripts have to match by full name or also simple name
 	 */
 	private boolean requireFullName = true;
@@ -679,29 +695,40 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				charset = (Charset) runtime.getContext().get(ResponseMethods.RESPONSE_DEFAULT_CHARSET);
 			}
 			String stringContent = writer.toString().trim();
-			if (addCsrfCheck && !noCsrf) {
-				int formPosition = getFormPosition(stringContent);
-				if (formPosition >= 0) {
-					// forcibly create a session if csrf checks are required
-					// otherwise it is impossible to perform the csrf check on incoming form data
-					if (session == null) {
-						session = sessionProvider.newSession();
-						ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
-						cookieHeader.addComment("Path=" + getCookiePath());
-						cookieHeader.addComment("HttpOnly");
-						headers.add(cookieHeader);
-						runtime.getContext().put(SessionMethods.SESSION, session);
-						
+			
+			// if we are streaming back html code to the client (something that is rendered by the browser) we need additional protection
+			if (isHTML(contentType)) {
+				// we add (optionally) csrf checks to forms
+				if (addCsrfCheck && !noCsrf) {
+					int formPosition = getFormPosition(stringContent);
+					if (formPosition >= 0) {
+						// forcibly create a session if csrf checks are required
+						// otherwise it is impossible to perform the csrf check on incoming form data
+						if (session == null) {
+							session = sessionProvider.newSession();
+							ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
+							cookieHeader.addComment("Path=" + getCookiePath());
+							cookieHeader.addComment("HttpOnly");
+							headers.add(cookieHeader);
+							runtime.getContext().put(SessionMethods.SESSION, session);
+							
+						}
+						// remove any previously existing CSRF token
+						// only remove it if we have a new form, otherwise getting additional (resourc-y) pages could reset the csrf token of an initial form-containing page
+						session.set(CSRF_TOKEN, null);
+						stringContent = addCsrfCheck(session, stringContent, formPosition);
 					}
-					// remove any previously existing CSRF token
-					// only remove it if we have a new form, otherwise getting additional (resourc-y) pages could reset the csrf token of an initial form-containing page
-					session.set(CSRF_TOKEN, null);
-					stringContent = addCsrfCheck(session, stringContent, formPosition);
+				}
+				// we optionally add tab nabbing prevention for links
+				if (addTabNabbingPrevention && !noTabNabbingPrevention) {
+					stringContent = addTabNabbingPrevention(stringContent, -1);
+				}
+				// we add click jacking prevention
+				if ((contentType == null || contentType.getValue().equalsIgnoreCase("text/html")) && addClickJackingPrevention) {
+					headers.add(new MimeHeader("X-Frame-Options", "DENY"));
 				}
 			}
-			if (addTabNabbingPrevention && !noTabNabbingPrevention) {
-				stringContent = addTabNabbingPrevention(stringContent, -1);
-			}
+			
 			if (!stringContent.isEmpty()) {
 				for (ContentRewriter rewriter : contentRewriters) {
 					stringContent = rewriter.rewrite(stringContent, contentType == null ? "text/html" : contentType.getValue());
@@ -1266,6 +1293,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public void setPreferredContentType(String preferredContentType) {
 		this.preferredContentType = preferredContentType;
+	}
+	
+	private static boolean isHTML(Header contentType) {
+		return contentType == null || contentType.getValue().equalsIgnoreCase("text/html");
 	}
 	
 	public static boolean isTextualType(String contentType) {
