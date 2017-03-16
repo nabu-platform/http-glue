@@ -353,7 +353,7 @@ public class UserMethods {
 			token = (Token) ScriptRuntime.getRuntime().getExecutionContext().getPrincipal();
 		}
 		TokenValidator validator = (TokenValidator) ScriptRuntime.getRuntime().getContext().get(TOKEN_VALIDATOR);
-		return token != null && ((validator == null && (token.getValidUntil() == null || token.getValidUntil().after(new Date()))) || validator.isValid(token));
+		return token != null && ((validator == null && (token.getValidUntil() == null || token.getValidUntil().after(new Date()))) || (validator != null && validator.isValid(token)));
 	}
 	
 	@GlueMethod(description = "Checks if a user has certain roles")
