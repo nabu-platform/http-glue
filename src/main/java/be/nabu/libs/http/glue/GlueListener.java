@@ -408,6 +408,12 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				noTabNabbingPrevention = relAnnotation.equalsIgnoreCase("none") || relAnnotation.equalsIgnoreCase("false");
 			}
 			
+			boolean noClickJackingPrevention = (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("noframe"));
+			String frameAnnotation = script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null ? script.getRoot().getContext().getAnnotations().get("frame") : null;
+			if (frameAnnotation != null) {
+				noClickJackingPrevention = frameAnnotation.equalsIgnoreCase("none") || frameAnnotation.equalsIgnoreCase("false");
+			}
+			
 			Map<String, Object> input = new HashMap<String, Object>();
 			// scan all inputs, check for annotations to indicate what you might want
 			@SuppressWarnings("rawtypes")
@@ -437,7 +443,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					}
 					// if you define the token as being single use, remove the token now that it has been used so it can only be used once
 					// this is interesting for more sensitive pages like login pages etc
-					else if ("single".equals(relAnnotation)) {
+					else if ("single".equals(csrfAnnotation)) {
 						session.set(CSRF_TOKEN, null);
 					}
 				}
@@ -724,7 +730,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					stringContent = addTabNabbingPrevention(stringContent, -1);
 				}
 				// we add click jacking prevention
-				if ((contentType == null || contentType.getValue().equalsIgnoreCase("text/html")) && addClickJackingPrevention) {
+				if ((contentType == null || contentType.getValue().equalsIgnoreCase("text/html")) && addClickJackingPrevention && !noClickJackingPrevention) {
 					headers.add(new MimeHeader("X-Frame-Options", "DENY"));
 				}
 			}
