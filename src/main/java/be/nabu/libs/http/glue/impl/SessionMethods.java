@@ -12,6 +12,11 @@ public class SessionMethods {
 	public static final String SESSION_PROVIDER = "sessionProvider";
 	public static final String SESSION = "session";
 	
+	public static Iterable<String> keys() {
+		Session session = getSession();
+		return session == null ? null : session;
+	}
+	
 	public static Object get(String key) {
 		Session session = getSession();
 		return session == null ? null : session.get(key);

@@ -32,7 +32,7 @@ import be.nabu.glue.api.runs.GlueValidation;
 public class GlueCSSFormatter implements OutputFormatter {
 
 	private Stack<Executor> context = new Stack<Executor>();
-	private boolean contextPrinted, mediaPrinted;
+	private boolean contextPrinted, parentPrinted;
 	
 	private static List<String> singleQuoteStates = Arrays.asList(new String [] { "active", "checked", "disabled", "empty", "enabled", "first-child", "first-of-type", "focus", "hover", 
 			"in-range", "invalid", "lang", "last-child", "last-of-type", "link", "not", "nth-child", "nth-last-child", "nth-last-of-type", "nth-of-type", "only-of-type", "only-child", 
@@ -62,18 +62,26 @@ public class GlueCSSFormatter implements OutputFormatter {
 	public void before(Executor executor) {
 		if (!(executor instanceof AssignmentExecutor) && executor instanceof ExecutorGroup && executor.getContext() != null && executor.getContext().getAnnotations() != null) {
 			Map<String, String> annotations = executor.getContext().getAnnotations();
-			if (hasContext(annotations) || annotations.containsKey("media")) {
+			if (hasContext(annotations) || annotations.containsKey("media") || annotations.containsKey("keyframes")) {
 				if (contextPrinted) {
 					print("}", "");
 					contextPrinted = false;
 				}
 				if (annotations.containsKey("media")) {
-					if (mediaPrinted) {
+					if (parentPrinted) {
 						parent.print("}\n");
-						mediaPrinted = false;
+						parentPrinted = false;
 					}
 					parent.print("@media " + executor.getContext().getAnnotations().get("media").trim() + " {\n");
-					mediaPrinted = true;
+					parentPrinted = true;
+				}
+				else if (annotations.containsKey("keyframes")) {
+					if (parentPrinted) {
+						parent.print("}\n");
+						parentPrinted = false;
+					}
+					parent.print("@keyframes " + executor.getContext().getAnnotations().get("keyframes").trim() + " {\n");
+					parentPrinted = true;
 				}
 				context.push(executor);
 			}
@@ -90,9 +98,9 @@ public class GlueCSSFormatter implements OutputFormatter {
 				// we have to print the "new" context again
 				contextPrinted = false;
 			}
-			if (mediaPrinted && executor.getContext().getAnnotations().containsKey("media")) {
+			if (parentPrinted && (executor.getContext().getAnnotations().containsKey("media") || executor.getContext().getAnnotations().containsKey("keyframes"))) {
 				parent.print("}\n");
-				mediaPrinted = false;
+				parentPrinted = false;
 			}
 			context.pop();
 		}
@@ -108,10 +116,10 @@ public class GlueCSSFormatter implements OutputFormatter {
 				}
 				boolean isRaw = message instanceof String && (((String) message).contains("{") || ((String) message).trim().isEmpty());
 				if (!contextPrinted && !isRaw) {
-					parent.print((mediaPrinted ? "\t" : "") + buildContext() + "\n");
+					parent.print((parentPrinted ? "\t" : "") + buildContext() + "\n");
 					contextPrinted = true;
 				}
-				parent.print((mediaPrinted ? "\t" : "") + message + "\n");
+				parent.print((parentPrinted ? "\t" : "") + message + "\n");
 			}
 		}
 	}
@@ -381,9 +389,9 @@ public class GlueCSSFormatter implements OutputFormatter {
 				// we have to print the "new" context again
 				contextPrinted = false;
 			}
-			if (mediaPrinted) {
+			if (parentPrinted) {
 				parent.print("}\n");
-				mediaPrinted = false;
+				parentPrinted = false;
 			}
 		}
 		parent.end(script, started, stopped, exception);		

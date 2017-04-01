@@ -44,6 +44,7 @@ import be.nabu.utils.xml.XMLUtils;
 @MethodProviderClass(namespace = "response")
 public class ResponseMethods {
 	
+	public static Boolean ABSOLUTE = Boolean.parseBoolean(System.getProperty("be.nabu.glue.redirect.absolute", "false"));
 	public static final List<String> allowedTypes = Arrays.asList(MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML);
 	public static final String RESPONSE_HEADERS = "responseHeaders";
 	public static final String RESPONSE_STREAM = "responseStream";
@@ -234,7 +235,15 @@ public class ResponseMethods {
 	
 	public static void redirect(String location, Boolean permanent) throws ParseException, IOException, FormatException {
 		ResponseMethods.code(permanent != null && permanent ? 301 : ("get".equalsIgnoreCase(RequestMethods.method()) ? 307 : 303));
-		ResponseMethods.header("Location", location.startsWith("http://") || location.startsWith("https://") ? location : RequestMethods.url(location).toString(), true);
+		// in RFC https://tools.ietf.org/html/rfc2616#section-14.30 it states that location has to be absolute
+		// however in RFC https://tools.ietf.org/html/rfc7231#section-7.1.2 which superceeds the previous RFC, it states that the location can be relative
+		// the latter RFC is active since mid-2014
+		if (ABSOLUTE) {
+			ResponseMethods.header("Location", location.startsWith("http://") || location.startsWith("https://") ? location : RequestMethods.url(location).toString(), true);
+		}
+		else {
+			ResponseMethods.header("Location", location, true);
+		}
 		ServerMethods.abort();
 	}
 	
