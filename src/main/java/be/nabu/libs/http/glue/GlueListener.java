@@ -1426,7 +1426,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		else {
 			// the cache headers are explained clearly here: https://developers.google.com/web/fundamentals/performance/optimizing-content-efficiency/http-caching?hl=en
 			List<String> values = new ArrayList<String>();
-			if (maxAge != null) {
+			// if maxage is 0, we want to cache forever, however a max-age of 0 means the entry is stale
+			if (maxAge != null && maxAge != 0) {
 				values.add("max-age=" + maxAge);
 			}
 			if (revalidate != null && revalidate) {
