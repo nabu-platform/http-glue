@@ -11,6 +11,7 @@ public class SessionMethods {
 	
 	public static final String SESSION_PROVIDER = "sessionProvider";
 	public static final String SESSION = "session";
+	public static final String SESSION_DESTROYED = "sessionDestroyed";
 	
 	public static Iterable<String> keys() {
 		Session session = getSession();
@@ -35,6 +36,7 @@ public class SessionMethods {
 		if (session != null) {
 			session.destroy();
 		}
+		ScriptRuntime.getRuntime().getContext().put(SESSION_DESTROYED, true);
 	}
 	
 	public static boolean exists() {

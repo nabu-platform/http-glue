@@ -13,6 +13,7 @@ import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.Device;
 import be.nabu.libs.authentication.api.DeviceValidator;
 import be.nabu.libs.authentication.api.PermissionHandler;
+import be.nabu.libs.authentication.api.RefreshableToken;
 import be.nabu.libs.authentication.api.RoleHandler;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.authentication.api.TokenValidator;
@@ -130,6 +131,7 @@ public class UserMethods {
 	public static final String METRICS_LOGIN_FAILED = "loginFailed";
 	public static final String METRICS_REMEMBER_FAILED = "rememberFailed";
 	public static final String METRICS_USERNAME_FAILED = "usernameFailed";
+	public static final String INVALID_TOKEN = "invalidToken";
 	
 	@SuppressWarnings("unchecked")
 	private static boolean isBlacklisted() {
@@ -147,6 +149,31 @@ public class UserMethods {
 					return true;
 				}
 			}
+		}
+		return false;
+	}
+	
+	@GlueMethod(description = "Tries to refresh an existing token that may have expired")
+	public static boolean refresh() {
+		Token token = token();
+		if (token == null) {
+			token = (Token) ScriptRuntime.getRuntime().getContext().get(INVALID_TOKEN);
+		}
+		if (token != null && token instanceof RefreshableToken) {
+			token = ((RefreshableToken) token).refresh();
+			// in theory the new token might still be invalid, check it
+			if (token != null) {
+				TokenValidator validator = (TokenValidator) ScriptRuntime.getRuntime().getContext().get(TOKEN_VALIDATOR);
+				if (validator != null && !validator.isValid(token)) {
+					token = null;
+				}
+			}
+			SessionMethods.set(GlueListener.buildTokenName(realm()), token);
+			ExecutionContext context = ScriptRuntime.getRuntime() == null ? null : ScriptRuntime.getRuntime().getExecutionContext();
+			if (context instanceof SecurityUpgradeable) {
+				((SecurityUpgradeable) context).setPrincipal(token);
+			}
+			return token != null;
 		}
 		return false;
 	}

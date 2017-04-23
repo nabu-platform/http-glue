@@ -358,11 +358,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				}
 			}
 			
+			Token invalidToken = null;
 			// check validity of the token
 			if (tokenValidator != null) {
 				// if no longer valid, destroy the session, it may contain a lot of token-related data
 				// note that if the token was already null, we don't destroy the session, it could be a guest session
 				if (token != null && !tokenValidator.isValid(token)) {
+					invalidToken = token;
 					session.destroy();
 					originalSessionId = null;
 					session = null;
@@ -615,6 +617,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			runtime.getContext().put(SessionMethods.SESSION, session);
 			runtime.getContext().put(UserMethods.LOGIN_BLACKLIST, loginBlacklist);
 			runtime.getContext().put(ServerMethods.METRICS, metrics);
+			runtime.getContext().put(UserMethods.INVALID_TOKEN, invalidToken);
+			runtime.getContext().put(UserMethods.TOKEN_VALIDATOR, getTokenValidator());
 			
 			if (filePath != null) {
 				runtime.getContext().put(SystemMethodProvider.CLI_DIRECTORY, filePath);
@@ -648,13 +652,23 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				headers = new ArrayList<Header>();
 			}
 			headers.addAll(headersToAdd);
-			session = getSession(sessionProvider, runtime); 
-			// set a cookie for the session if it's a new session
-			if (session != null && !session.getId().equals(originalSessionId)) {
-				ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
-				cookieHeader.addComment("Path=" + getCookiePath());
-				cookieHeader.addComment("HttpOnly");
-				headers.add(cookieHeader);
+			
+			Boolean sessionDestroyed = (Boolean) runtime.getContext().get(SessionMethods.SESSION_DESTROYED);
+			// explicitly destroy the session cookie, jwt session cookies may outlive their destroyedness otherwise
+			if (sessionDestroyed != null && sessionDestroyed) {
+				session = null;
+				// add an explicit header to set the cookie session to invalid
+				headers.add(HTTPUtils.newSetCookieHeader(SESSION_COOKIE, "invalid", new Date(new Date().getTime() - 1000l*60*60*24), getCookiePath(), null, null, true));
+			}
+			else {
+				session = getSession(sessionProvider, runtime); 
+				// set a cookie for the session if it's a new session
+				if (session != null && !session.getId().equals(originalSessionId)) {
+					ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
+					cookieHeader.addComment("Path=" + getCookiePath());
+					cookieHeader.addComment("HttpOnly");
+					headers.add(cookieHeader);
+				}
 			}
 			
 			// required headers
