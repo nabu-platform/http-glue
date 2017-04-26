@@ -459,6 +459,37 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// not all scripts can be cached as they might have conditional execution or permission based logic
 			// you need to annotate your scripts to achieve caching
 			boolean isCacheable = !refreshScripts && cacheProvider != null && script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("cache");
+
+			Header cacheHeader;
+			Long maxAge = null;
+			Boolean revalidate = null;
+			Boolean isPrivate = null;
+			// add caching if necessary
+			// even if we don't have a cache provider, we want to set the cache header correctly for upstream caching
+			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("cache")) {
+				String string = script.getRoot().getContext().getAnnotations().get("cache");
+				if (string != null && !string.trim().isEmpty()) {
+					for (String part : string.split("[\\s,]+")) {
+						part = part.trim();
+						if (part.equals("revalidate")) {
+							revalidate = true;
+						}
+						else if (part.equals("private")) {
+							isPrivate = true;
+						}
+						else if (part.equals(PUBLIC)) {
+							isPrivate = false;
+						}
+						else if (part.matches("[0-9]+")) {
+							maxAge = Long.parseLong(part);
+						}
+					}
+				}
+				cacheHeader = buildCacheHeader(maxAge, revalidate, isPrivate);
+			}
+			else {
+				cacheHeader = buildCacheHeader(-1l, null, null);
+			}
 			
 			List<Header> headersToAdd = scanBefore || isCacheable ? scan(request, queryProperties, formParameters, cookies, input, pathParameters, script.getRoot()) : new ArrayList<Header>();
 			
@@ -518,22 +549,30 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 							}
 						}
 					}
+					
+					Date lastModified = null;
+					
 					// check for non-modified things
 					if (cache instanceof ExplorableCache && !isDifferentEtag) {
 						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKeyString);
 						if (entry != null) {
-							lastModifiedHeader = new MimeHeader("Last-Modified", HTTPUtils.formatDate(entry.getLastModified()));
+							lastModified = entry.getLastModified();
+							lastModifiedHeader = new MimeHeader("Last-Modified", HTTPUtils.formatDate(lastModified));
 							if (request.getContent() != null) {
 								Header header = MimeUtils.getHeader("If-Modified-Since", request.getContent().getHeaders());
 								if (header != null && header.getValue() != null) {
 									Date ifModifiedSince = HTTPUtils.parseDate((String) header.getValue());
-									if (!ifModifiedSince.after(entry.getLastModified())) {
+									if (!ifModifiedSince.after(lastModified)) {
 										// if it has not been modified, send back a 304
-										return new DefaultHTTPResponse(304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
+										DefaultHTTPResponse unchangedResponse = new DefaultHTTPResponse(304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
 											new MimeHeader("Content-Length", "0"), 
-											new MimeHeader("Cache-Control", "public"),
+											cacheHeader,
 											lastModifiedHeader
 										));
+										if (maxAge != null) {
+											unchangedResponse.getContent().setHeader(buildExpireHeader(lastModified, maxAge));
+										}
+										return unchangedResponse;
 									}
 								}
 							}
@@ -555,11 +594,12 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						if (response.getContent() != null) {
 							// also set it in these responses
 							if (lastModifiedHeader != null) {
-								response.getContent().setHeader(
-									new MimeHeader("Cache-Control", "public"),
-									lastModifiedHeader
-								);
+								response.getContent().setHeader(lastModifiedHeader);
 							}
+							if (lastModified != null && maxAge != null) {
+								response.getContent().setHeader(buildExpireHeader(lastModified, maxAge));
+							}
+							response.getContent().setHeader(cacheHeader);
 							// set a cookie for the session if it's a new session
 							if (session != null && !session.getId().equals(originalSessionId)) {
 								// renew the session as well
@@ -682,32 +722,6 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				else if (header.getName().equalsIgnoreCase("Content-Length")) {
 					contentLength = header;
 				}
-			}
-			
-			// add caching if necessary
-			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations().containsKey("cache")) {
-				String string = script.getRoot().getContext().getAnnotations().get("cache");
-				Long maxAge = null;
-				Boolean revalidate = null;
-				Boolean isPrivate = null;
-				if (string != null && !string.trim().isEmpty()) {
-					for (String part : string.split("[\\s,]+")) {
-						part = part.trim();
-						if (part.equals("revalidate")) {
-							revalidate = true;
-						}
-						else if (part.equals("private")) {
-							isPrivate = true;
-						}
-						else if (part.equals(PUBLIC)) {
-							isPrivate = false;
-						}
-						else if (part.matches("[0-9]+")) {
-							maxAge = Long.parseLong(part);
-						}
-					}
-				}
-				headers.add(buildCacheHeader(maxAge, revalidate, isPrivate));
 			}
 			
 			Charset charset = (Charset) runtime.getContext().get(ResponseMethods.RESPONSE_CHARSET);
@@ -833,9 +847,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						if (entry != null) {
 							response.getContent().setHeader(
 								new MimeHeader("ETag", cacheHash),
-								new MimeHeader("Cache-Control", "public"),
 								new MimeHeader("Last-Modified", HTTPUtils.formatDate(entry.getLastModified()))
 							);
+							if (maxAge != null) {
+								response.getContent().setHeader(buildExpireHeader(entry.getLastModified(), maxAge));
+							}
 						}
 					}
 				}
@@ -843,6 +859,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					logger.warn("Page {} is skipping cache because response cookies were detected", script);
 				}
 			}
+			// always set the cache header to avoid confusion
+			response.getContent().setHeader(cacheHeader);
+			
 			if (setChunked) {
 				response.getContent().setHeader(new MimeHeader("Transfer-Encoding", "chunked"));
 			}
@@ -1432,6 +1451,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		this.realm = realm;
 	}
 	
+	public static Header buildExpireHeader(Date lastModified, long maxAge) {
+		// the age is in seconds
+		return new MimeHeader("Expires", HTTPUtils.formatDate(new Date(lastModified.getTime() + (1000l * maxAge))));
+	}
+	
 	public static Header buildCacheHeader(Long maxAge, Boolean revalidate, Boolean isPrivate) {
 		// this indicates that it should not be cached
 		if (maxAge != null && maxAge < 0) {
@@ -1445,8 +1469,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				values.add("max-age=" + maxAge);
 			}
 			if (revalidate != null && revalidate) {
+				// the response the server gave _has_ to be verified each time before it is served to the user, this can be met with 304 however
 				values.add("no-cache");
+				// this basically says that once the content is stale, it _must_ be retrieved from the server
 				values.add("must-revalidate");
+				// no-store means that the response can never be stored, so it is stricter than no-cache in that the server can no longer send back a 304
 			}
 			if (isPrivate != null && isPrivate) {
 				values.add("private");
