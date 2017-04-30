@@ -11,6 +11,11 @@ public class GlueHTTPUtils {
 		return header == null ? getIp(headers) : header.getValue();
 	}
 	
+	public static Long getPort(Header...headers) {
+		Header header = MimeUtils.getHeader(ServerHeader.REMOTE_PORT.getName(), headers);
+		return header == null ? null : Long.parseLong(header.getValue());
+	}
+	
 	public static String getIp(Header...headers) {
 		Header header = MimeUtils.getHeader(ServerHeader.REMOTE_ADDRESS.getName(), headers);
 		return header == null ? null : header.getValue();

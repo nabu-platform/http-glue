@@ -155,6 +155,13 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 			StringWriter writer = new StringWriter();
 			runtime.setFormatter(new GlueHTTPFormatter(repository, charset, writer));
 			runtime.run();
+			
+			String writtenContent = writer.toString();
+			Charset charset = (Charset) runtime.getContext().get(ResponseMethods.RESPONSE_CHARSET);
+			if (charset == null) {
+				charset = getCharset();
+			}
+			
 			// get the headers
 			List<Header> headers = (List<Header>) runtime.getContext().get(ResponseMethods.RESPONSE_HEADERS);
 			if (headers == null) {
@@ -166,6 +173,9 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 			ModifiablePart part;
 			if (stream != null) {
 				part = new PlainMimeContentPart(null, IOUtils.wrap(stream), headers.toArray(new Header[headers.size()]));
+			}
+			else if (!writtenContent.isEmpty()) {
+				part = new PlainMimeContentPart(null, IOUtils.wrap(writtenContent.getBytes(charset), true), headers.toArray(new Header[headers.size()]));
 			}
 			else if (responseIsEmpty || request.getContent() == null) {
 				part = new PlainMimeEmptyPart(null, headers.toArray(new Header[headers.size()]));
@@ -186,12 +196,19 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 			}
 			String method = (String) runtime.getContext().get(ResponseMethods.RESPONSE_METHOD);
 			String target = (String) runtime.getContext().get(ResponseMethods.RESPONSE_TARGET);
-			return new DefaultHTTPRequest(
+			
+			Boolean responseChanged = (Boolean) runtime.getContext().get(ResponseMethods.RESPONSE_CHANGED);
+			if (responseChanged == null) {
+				responseChanged = false;
+			}
+			responseChanged |= !writtenContent.isEmpty();
+			
+			return responseChanged ? new DefaultHTTPRequest(
 				method == null ? request.getMethod() : method, 
 				target == null ? request.getTarget() : target, 
 				part,
 				request.getVersion()
-			);
+			) : null;
 		}
 		catch (Exception e) {
 			throw new HTTPException(500, e);
@@ -230,5 +247,12 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 		this.preferredResponseType = preferredResponseType;
 	}
 
-	
+	public Charset getCharset() {
+		return charset;
+	}
+
+	public void setCharset(Charset charset) {
+		this.charset = charset;
+	}
+
 }

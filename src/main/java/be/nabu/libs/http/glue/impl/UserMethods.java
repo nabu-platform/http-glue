@@ -11,7 +11,6 @@ import be.nabu.glue.api.SecurityUpgradeable;
 import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.Device;
-import be.nabu.libs.authentication.api.DeviceValidator;
 import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.RefreshableToken;
 import be.nabu.libs.authentication.api.RoleHandler;
@@ -25,6 +24,9 @@ import be.nabu.libs.authentication.impl.DeviceImpl;
 import be.nabu.libs.authentication.impl.ImpersonateToken;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.HTTPException;
+import be.nabu.libs.http.api.HTTPEntity;
+import be.nabu.libs.http.api.HTTPRequest;
+import be.nabu.libs.http.api.LinkableHTTPResponse;
 import be.nabu.libs.http.glue.GlueListener;
 import be.nabu.libs.metrics.api.MetricInstance;
 
@@ -72,6 +74,35 @@ public class UserMethods {
 
 		public void setName(String name) {
 			this.name = name;
+		}
+	}
+	
+	public static class Source {
+		private String ip, host;
+		private Long port;
+
+		public String getIp() {
+			return ip;
+		}
+
+		public void setIp(String ip) {
+			this.ip = ip;
+		}
+
+		public String getHost() {
+			return host;
+		}
+
+		public void setHost(String host) {
+			this.host = host;
+		}
+
+		public Long getPort() {
+			return port;
+		}
+
+		public void setPort(Long port) {
+			this.port = port;
 		}
 	}
 
@@ -276,49 +307,42 @@ public class UserMethods {
 		return (String) ScriptRuntime.getRuntime().getContext().get(REALM);
 	}
 	
-	@GlueMethod(description = "Allows you to retrieve the token for a certain realm")
+	@GlueMethod(description = "Allows you to retrieve the token for the user")
 	public static Token token() {
 		return (Token) SessionMethods.get(GlueListener.buildTokenName(realm()));
 	}
 	
-	@GlueMethod(description = "Allows you to check if the current device is allowed for this account")
-	public static boolean device() {
-		DeviceValidator deviceValidator = (DeviceValidator) ScriptRuntime.getRuntime().getContext().get(DEVICE_VALIDATOR);
-		if (deviceValidator != null) {
-			String realm = realm();
-			Token token = token();
-			// devices are realm specific because you want the id to be globally unique
-			// a device may have been approved for use with realm 1 but not realm 2
-			// however the id is a primary key and is linked to exactly one user...which is linked to exactly one realm
-			String deviceId = RequestMethods.cookie("Device-" + realm);
-			boolean isNewDevice = false;
-			if (deviceId == null) {
-				deviceId = UUID.randomUUID().toString().replace("-", "");
-				isNewDevice = true;
-			}
-			boolean allowed = deviceValidator.isAllowed(token, new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getIp(RequestMethods.headers(null))));
-			if (!allowed) {
-				return false;
-			}
-			// set a cookie to recognize device in the future
-			if (isNewDevice) {
-				ResponseMethods.cookie(
-					"Device-" + realm, 
-					deviceId, 
-					// Set it to 100 years in the future
-					new Date(new Date().getTime() + 1000l*60*60*24*365*100),
-					// path
-					ServerMethods.cookiePath(), 
-					// domain
-					null, 
-					// secure
-					(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
-					// http only
-					true
-				);
-			}
+	@GlueMethod(description = "Allows you to retrieve the device for the user")
+	public static Device device() {
+		String realm = realm();
+		// devices are realm specific because you want the id to be globally unique
+		// a device may have been approved for use with realm 1 but not realm 2
+		// however the id is a primary key and is linked to exactly one user...which is linked to exactly one realm
+		String deviceId = RequestMethods.cookie("Device-" + realm);
+		boolean isNewDevice = false;
+		if (deviceId == null) {
+			deviceId = UUID.randomUUID().toString().replace("-", "");
+			isNewDevice = true;
 		}
-		return true;
+		DeviceImpl device = new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getIp(RequestMethods.headers(null)));
+		// set a cookie to recognize device in the future
+		if (isNewDevice) {
+			ResponseMethods.cookie(
+				"Device-" + realm, 
+				deviceId, 
+				// Set it to 100 years in the future
+				new Date(new Date().getTime() + 1000l*60*60*24*365*100),
+				// path
+				ServerMethods.cookiePath(), 
+				// domain
+				null, 
+				// secure
+				(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
+				// http only
+				true
+			);
+		}
+		return device;
 	}
 	
 	@GlueMethod(description = "Authenticates the user with the given password. If succesful, it recreates the session to prevent session spoofing.", returns = "boolean")
@@ -430,5 +454,25 @@ public class UserMethods {
 	@GlueMethod(description = "Generates a new salt")
 	public static String salt() {
 		return UUID.randomUUID().toString().replace("-", "");
+	}
+	
+	@GlueMethod(description = "Get the source information")
+	public static Source source() {
+		HTTPEntity entity = RequestMethods.entity();
+		HTTPRequest request = null;
+		if (entity instanceof HTTPRequest) {
+			request = (HTTPRequest) entity;
+		}
+		else if (entity instanceof LinkableHTTPResponse) {
+			request = ((LinkableHTTPResponse) entity).getRequest();
+		}
+		if (request == null || request.getContent() == null) {
+			return null;
+		}
+		Source source = new Source();
+		source.setHost(GlueHTTPUtils.getHost(request.getContent().getHeaders()));
+		source.setIp(GlueHTTPUtils.getIp(request.getContent().getHeaders()));
+		source.setPort(GlueHTTPUtils.getPort(request.getContent().getHeaders()));
+		return source;
 	}
 }

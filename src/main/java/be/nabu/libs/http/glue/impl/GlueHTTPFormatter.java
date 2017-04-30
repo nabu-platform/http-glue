@@ -38,7 +38,7 @@ public class GlueHTTPFormatter extends SimpleOutputFormatter {
 				Object value = GlueListener.getValue(
 					repository,
 					charset,
-					RequestMethods.content(), 
+					RequestMethods.entity(), 
 					(AssignmentExecutor) executor, 
 					SessionMethods.getSession(), 
 					(Map<String, List<String>>) RequestMethods.gets(null), 

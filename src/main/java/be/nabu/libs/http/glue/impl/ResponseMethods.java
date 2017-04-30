@@ -64,11 +64,14 @@ public class ResponseMethods {
 	public static final String RESPONSE_METHOD = "responseMethod";
 	public static final String RESPONSE_EMPTY = "responseEmpty";
 	
+	public static final String RESPONSE_CHANGED = "responseChanged";
+	
 	/**
 	 * If you only pass in the header name, it will simply be removed
 	 */
 	@SuppressWarnings("unchecked")
 	public static Header header(@GlueParam(name = "name") String name, @GlueParam(name = "value") String value, @GlueParam(name = "removeExisting", defaultValue = "true") Boolean removeExisting) throws ParseException, IOException {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		if (removeExisting == null || removeExisting) {
 			removeHeader(name);
 		}
@@ -87,6 +90,7 @@ public class ResponseMethods {
 	}
 	
 	public static void target(@GlueParam(name = "target", defaultValue = "/") String target) {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		if (target == null) {
 			target = "/";
 		}
@@ -94,6 +98,7 @@ public class ResponseMethods {
 	}
 	
 	public static void method(@GlueParam(name = "method", defaultValue = "GET") String method) {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		if (method == null) {
 			method = "GET";
 		}
@@ -113,11 +118,13 @@ public class ResponseMethods {
 	}
 	
 	public static void code(Integer code) {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CODE, code);
 	}
 	
 	@SuppressWarnings({ "unchecked" })
 	public static void content(Object response, String contentType) throws IOException, ParseException {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		Charset usedCharset = null;
 		if (response == null) {
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_EMPTY, true);
@@ -176,7 +183,7 @@ public class ResponseMethods {
 			}
 			usedCharset = getCharset();
 			// given that we are in a primarily website-driven world, use json as default
-			HTTPEntity request = RequestMethods.content();
+			HTTPEntity request = RequestMethods.entity();
 			if (contentType == null) {
 				List<String> acceptedTypes = MimeUtils.getAcceptedContentTypes(request.getContent().getHeaders());
 				acceptedTypes.retainAll(allowedTypes);
@@ -211,6 +218,7 @@ public class ResponseMethods {
 	
 	@SuppressWarnings("unchecked")
 	public static Header cookie(String key, String value, Date expires, String path, String domain, Boolean secure, Boolean httpOnly) {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		ModifiableHeader header = HTTPUtils.newSetCookieHeader(key, value, expires, path, domain, secure, httpOnly);
 		List<Header> headers = (List<Header>) ScriptRuntime.getRuntime().getContext().get(ResponseMethods.RESPONSE_HEADERS);
 		if (headers == null) {
@@ -222,6 +230,7 @@ public class ResponseMethods {
 	}
 	
 	public static void charset(String charset) {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHARSET, Charset.forName(charset));
 	}
 	
@@ -234,6 +243,7 @@ public class ResponseMethods {
 	}
 	
 	public static void redirect(String location, Boolean permanent) throws ParseException, IOException, FormatException {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		ResponseMethods.code(permanent != null && permanent ? 301 : ("get".equalsIgnoreCase(RequestMethods.method()) ? 307 : 303));
 		// in RFC https://tools.ietf.org/html/rfc2616#section-14.30 it states that location has to be absolute
 		// however in RFC https://tools.ietf.org/html/rfc7231#section-7.1.2 which superceeds the previous RFC, it states that the location can be relative
@@ -248,6 +258,7 @@ public class ResponseMethods {
 	}
 	
 	public static void notModified() {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		ResponseMethods.code(304);
 		ServerMethods.abort();
 	}
@@ -257,6 +268,7 @@ public class ResponseMethods {
 			@GlueParam(name = "maxAge", description = "How long the cache should live, use '-1' to indicate that it should not be cached and null or 0 to cache indefinately") Long maxAge, 
 			@GlueParam(name = "revalidate", description = "Whether or not the cached data should be revalidated", defaultValue = "false") Boolean revalidate, 
 			@GlueParam(name = "private", description = "Whether or not the cache is private", defaultValue = "false") Boolean isPrivate) throws ParseException, IOException {
+		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		Header header = GlueListener.buildCacheHeader(maxAge, revalidate, isPrivate);
 		List<Header> headers = (List<Header>) ScriptRuntime.getRuntime().getContext().get(RESPONSE_HEADERS);
 		if (headers == null) {

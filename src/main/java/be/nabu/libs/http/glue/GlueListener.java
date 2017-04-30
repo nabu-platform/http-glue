@@ -221,6 +221,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	 */
 	private boolean requireFullName = true;
 	
+	/**
+	 * Whether or not the listener is obliged to give a response if a script is found
+	 */
+	private boolean requireResponse = true;
+	
 	private String filePath;
 	
 	private Map<String, Date> loginBlacklist = new HashMap<String, Date>();
@@ -630,7 +635,6 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					}
 				}
 			}
-			
 			SimpleExecutionContext executionContext = new SimpleExecutionContext(environment, null, "true".equals(environment.getParameters().get("debug")));
 			executionContext.setOutputCurrentLine(false);
 			executionContext.setPrincipal(token);
@@ -826,6 +830,19 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			else {
 				part = new PlainMimeEmptyPart(null, headers.toArray(new Header[headers.size()]));
 			}
+			// if we don't actually require a response, check if you did something
+			if (!requireResponse) {
+				Boolean responseChanged = (Boolean) runtime.getContext().get(ResponseMethods.RESPONSE_CHANGED);
+				if (responseChanged == null) {
+					responseChanged = false;
+				}
+				// check a few lines above, it is a cheap way to detect that the user has not explicitly set any content
+				responseChanged |= !(part instanceof PlainMimeEmptyPart);
+				if (!responseChanged) {
+					return null;
+				}
+			}
+			
 			Integer code = (Integer) runtime.getContext().get(ResponseMethods.RESPONSE_CODE);
 			if (code == null) {
 				code = 200;
@@ -1600,6 +1617,22 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public void setCookiePath(String cookiePath) {
 		this.cookiePath = cookiePath;
+	}
+
+	public boolean isRequireResponse() {
+		return requireResponse;
+	}
+
+	public void setRequireResponse(boolean requireResponse) {
+		this.requireResponse = requireResponse;
+	}
+
+	public boolean isRequireFullName() {
+		return requireFullName;
+	}
+
+	public void setRequireFullName(boolean requireFullName) {
+		this.requireFullName = requireFullName;
 	}
 	
 }
