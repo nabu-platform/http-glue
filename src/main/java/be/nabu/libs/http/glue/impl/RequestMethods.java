@@ -3,6 +3,8 @@ package be.nabu.libs.http.glue.impl;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.text.ParseException;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -14,6 +16,7 @@ import be.nabu.libs.http.api.HTTPRequest;
 import be.nabu.libs.http.api.HTTPResponse;
 import be.nabu.libs.http.api.LinkableHTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
+import be.nabu.libs.http.core.ServerHeader;
 import be.nabu.libs.resources.URIUtils;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.ByteBuffer;
@@ -194,5 +197,17 @@ public class RequestMethods {
 		}
 		List<String> all = (List<String>) paths(name);
 		return all == null || all.isEmpty() ? null : all.get(0);
+	}
+	
+	public static Date received() throws ParseException {
+		HTTPRequest request = null;
+		if (entity() instanceof HTTPRequest) {
+			request = (HTTPRequest) entity();
+		}
+		else if (entity() instanceof LinkableHTTPResponse) {
+			request = ((LinkableHTTPResponse) entity()).getRequest();
+		}
+		Header header = request == null || request.getContent() == null ? null : MimeUtils.getHeader(ServerHeader.REQUEST_RECEIVED.getName(), request.getContent().getHeaders());
+		return header == null ? null : HTTPUtils.parseDate(header.getValue());
 	}
 }
