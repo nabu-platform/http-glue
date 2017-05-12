@@ -35,6 +35,7 @@ public class GlueCSSParser extends GlueParser {
 		String appendRegex = "^([\\s]*)&(.*)";
 		String mediaRegex = "^([\\s]*)@media[\\s]+(.*)";
 		String keyframesRegex = "^([\\s]*)@keyframes[\\s]+(.*)";
+		String inputRegex = "^([\\s]*)(.*\\?=.*)";
 		boolean isFirstLine = true;
 		for (String line : IOUtils.toString(IOUtils.wrap(reader)).replace("\r", "").split("[\n\r]+")) {
 			if (line.trim().endsWith("}") && !line.contains("${")) {
@@ -123,6 +124,16 @@ public class GlueCSSParser extends GlueParser {
 					builder.append(";");
 				}
 				builder.append("\"))\n");
+			}
+			// if we have an input variable, just pipe it through
+			else if (line.matches(inputRegex) && !isBlock) {
+				if (bracketCount == 0) {
+					whitespace = line.replaceFirst(inputRegex, "$1");
+				}
+				// append whitespace
+				builder.append(whitespace);
+				builder.append(line.replaceFirst(inputRegex, "$2"));
+				builder.append("\n");
 			}
 			else if (!isBlock) {
 				if (bracketCount == 0) {
