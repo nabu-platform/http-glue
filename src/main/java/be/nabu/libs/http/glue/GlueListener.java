@@ -310,7 +310,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					int index = scriptPath.lastIndexOf('.');
 					scriptPath = scriptPath.substring(0, index);
 					Script possibleScript = repository.getScript(scriptPath);
-					if (possibleScript != null && possibleScript.getRoot() != null && possibleScript.getRoot().getContext() != null && possibleScript.getRoot().getContext().getAnnotations() != null && possibleScript.getRoot().getContext().getAnnotations().containsKey("path")) {
+					if (possibleScript != null && possibleScript.getRoot() != null && possibleScript.getRoot().getContext() != null && possibleScript.getRoot().getContext().getAnnotations() != null && possibleScript.getRoot().getContext().getAnnotations().get("path") != null) {
 						String pathValue = possibleScript.getRoot().getContext().getAnnotations().get("path");
 						if (!pathAnalysis.containsKey(pathValue)) {
 							pathAnalysis.put(pathValue, analyzePath(pathValue));
@@ -459,7 +459,6 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				formParameters = HTTPUtils.getMultipartFormData(request);
 			}
 			Map<String, List<String>> queryProperties = URIUtils.getQueryProperties(uri);
-			
 			// whether or not this script can be cached
 			// not all scripts can be cached as they might have conditional execution or permission based logic
 			// you need to annotate your scripts to achieve caching
