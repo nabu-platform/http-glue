@@ -150,6 +150,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private Authenticator authenticator;
 	private TokenValidator tokenValidator;
 	private DeviceValidator deviceValidator;
+	private GlueScriptCallValidator scriptCallValidator;
 	private String preferredContentType = MediaType.APPLICATION_JSON;
 	private boolean scanBefore = false;
 	private String realm = "default";
@@ -400,6 +401,17 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				if (script.getRoot().getContext().getAnnotations().containsKey("permission") && permissionHandler != null
 						&& !checkPermission(permissionHandler, token, script.getRoot().getContext().getAnnotations().get("permission"), pathParameters)) {
 					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required permission for '" + ScriptUtils.getFullName(script) + "'");
+				}
+			}
+			
+			// check if the call can go through, a pre-emptive response may stop it (for example because of rate limiting)
+			if (scriptCallValidator != null) {
+				HTTPResponse response = scriptCallValidator.validate(request, token, device, script);
+				if (response != null) {
+					if (allowEncoding && response.getContent() instanceof ContentPart) {
+						HTTPUtils.setContentEncoding(response.getContent(), request.getContent().getHeaders());
+					}
+					return response;
 				}
 			}
 
@@ -1633,5 +1645,12 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	public void setRequireFullName(boolean requireFullName) {
 		this.requireFullName = requireFullName;
 	}
-	
+
+	public GlueScriptCallValidator getScriptCallValidator() {
+		return scriptCallValidator;
+	}
+
+	public void setScriptCallValidator(GlueScriptCallValidator scriptCallValidator) {
+		this.scriptCallValidator = scriptCallValidator;
+	}
 }
