@@ -113,8 +113,10 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 				token = authenticationHeader == null ? null : authenticationHeader.getToken();
 			}
 			
+			Token invalidToken = null;
 			// check validity of the token
 			if (token != null && tokenValidator != null && !tokenValidator.isValid(token)) {
+				invalidToken = token;
 				// don't use the session
 				if (session != null) {
 					session = null;
@@ -145,6 +147,7 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 			runtime.getContext().put(ResponseMethods.RESPONSE_PREFERRED_TYPE, preferredResponseType == null ? "text/html" : preferredResponseType);
 			runtime.getContext().put(SessionMethods.SESSION, session);
 			runtime.getContext().put(ResponseMethods.RESPONSE_DEFAULT_CHARSET, charset);
+			runtime.getContext().put(UserMethods.INVALID_TOKEN, invalidToken);
 
 			// set the original data
 			runtime.getContext().put(ResponseMethods.RESPONSE_HEADERS, request.getContent() == null ? new ArrayList<Header>() : new ArrayList<Header>(Arrays.asList(request.getContent().getHeaders())));

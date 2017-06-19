@@ -37,6 +37,7 @@ import be.nabu.glue.api.StringSubstituterProvider;
 import be.nabu.glue.core.api.GroupedScriptRepository;
 import be.nabu.glue.core.api.OptionalTypeConverter;
 import be.nabu.glue.core.impl.DefaultOptionalTypeProvider;
+import be.nabu.glue.core.impl.GlueUtils;
 import be.nabu.glue.core.impl.methods.ScriptMethods;
 import be.nabu.glue.core.impl.providers.SystemMethodProvider;
 import be.nabu.glue.impl.SimpleExecutionContext;
@@ -275,11 +276,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		try {
 			boolean secure = "true".equals(environment.getParameters().get("secure"));
 			URI uri = HTTPUtils.getURI(request, secure);
+			String originalPath;
 			String path = URIUtils.normalize(uri.getPath());
-			// not sure if we want to keep this but it may trigger odd things as the '/' is replaced with a '.' for script lookup
-			if (path.contains(".")) {
-				return null;
-			}
 			if (!path.startsWith(serverPath)) {
 				return null;
 			}
@@ -297,6 +295,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				if (path.startsWith("/")) {
 					path = path.substring(1);
 				}
+				originalPath = path;
+				// no dots allowed in the path because of lookup
+				path = path.replace('.', '-');
 				path = path.replace('/', '.');
 			}
 			if (path.trim().isEmpty()) {
@@ -306,6 +307,21 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			Script script = repository.getScript(path);
 			String scriptPath = path;
 			if (script == null && allowPathLookup) {
+				// check if the index script has a path annotation
+				Script indexScript = repository.getScript("index");
+				if (indexScript != null && indexScript.getRoot() != null && indexScript.getRoot().getContext() != null && indexScript.getRoot().getContext().getAnnotations() != null && indexScript.getRoot().getContext().getAnnotations().get("path") != null) {
+					String pathValue = indexScript.getRoot().getContext().getAnnotations().get("path");
+					if (!pathAnalysis.containsKey(pathValue)) {
+						pathAnalysis.put(pathValue, analyzePath(pathValue));
+					}
+					Map<String, String> analyze = pathAnalysis.get(pathValue).analyze(originalPath);
+					if (analyze != null) {
+						script = indexScript;
+						scriptPath = "index";
+						pathParameters.putAll(analyze);
+					}
+				}
+				
 				// look up the path for a valid script with an "path" annotation
 				while (script == null && scriptPath.contains(".")) {
 					int index = scriptPath.lastIndexOf('.');
@@ -317,7 +333,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 							pathAnalysis.put(pathValue, analyzePath(pathValue));
 						}
 						// the +1 is to also skip the "." after the script name
-						String remainingPath = path.substring(scriptPath.length() + 1).replace('.', '/');
+						String remainingPath = originalPath.substring(scriptPath.length() + 1);
 						Map<String, String> analyze = pathAnalysis.get(pathValue).analyze(remainingPath);
 						if (analyze != null) {
 							script = possibleScript;
@@ -355,11 +371,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			else {
 				AuthenticationHeader authenticationHeader = HTTPUtils.getAuthenticationHeader(request);
 				token = authenticationHeader == null ? null : authenticationHeader.getToken();
-				// if we have a token, set it in the session
-				if (token != null) {
-					if (session == null) {
-						session = sessionProvider.newSession();
-					}
+				// if we have a token and a session, set it in the session
+				if (token != null && session != null) {
 					session.set(buildTokenName(realm), token);
 				}
 			}
@@ -831,15 +844,20 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				);
 				headers.add(cookieHeader);
 			}
-			ModifiablePart part;
-			if (stream != null) {
-				part = new PlainMimeContentPart(null, IOUtils.wrap(stream), headers.toArray(new Header[headers.size()]));
-			}
-			else if (byteContent != null) {
-				part = new PlainMimeContentPart(null, IOUtils.wrap(byteContent, true), headers.toArray(new Header[headers.size()]));
+			ModifiablePart part = (ModifiablePart) runtime.getContext().get(ResponseMethods.RESPONSE_PART);
+			if (part == null) {
+				if (stream != null) {
+					part = new PlainMimeContentPart(null, IOUtils.wrap(stream), headers.toArray(new Header[headers.size()]));
+				}
+				else if (byteContent != null) {
+					part = new PlainMimeContentPart(null, IOUtils.wrap(byteContent, true), headers.toArray(new Header[headers.size()]));
+				}
+				else {
+					part = new PlainMimeEmptyPart(null, headers.toArray(new Header[headers.size()]));
+				}
 			}
 			else {
-				part = new PlainMimeEmptyPart(null, headers.toArray(new Header[headers.size()]));
+				part.setHeader(headers.toArray(new Header[headers.size()]));
 			}
 			// if we don't actually require a response, check if you did something
 			if (!requireResponse) {
@@ -1211,6 +1229,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				name = name.substring(0, 1) + name.substring(1).replaceAll("([A-Z])", "-$1");
 			}
 			value = entity.getContent() == null ? null : MimeUtils.getHeader(name, entity.getContent().getHeaders());
+			if (value != null) {
+				value = MimeUtils.getFullHeaderValue((Header) value);
+			}
 			if (value != null && preparseHeaders && name.equalsIgnoreCase("If-Modified-Since")) {
 				try {
 					value = HTTPUtils.parseDate((String) value);
@@ -1269,6 +1290,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						}
 					}
 				}
+				else if (value != null) {
+					value = URIUtils.decodeURL(value.toString());
+				}
 			}
 		}
 		else if (executor.getContext().getAnnotations().containsKey("cookie")) {
@@ -1294,27 +1318,29 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			value = pathParameters == null ? null : pathParameters.get(name);
 		}
-		else {
-			// try from the GET
-			if (queryParameters != null) {
-				value = fromParameters(queryParameters, variableName);
-			}
-			// try from POST
-			if (value == null && formParameters != null) {
-				value = fromParameters(formParameters, variableName);
-			}
-			// try from headers
-			if (value == null) {
-				String headerName = variableName.replaceAll("([A-Z])", "-$1");
-				if (headerName.startsWith("-")) {
-					headerName = headerName.substring(1);
-				}
-				Header header = MimeUtils.getHeader(headerName, entity.getContent().getHeaders());
-				if (header != null) {
-					value = header.getValue();
-				}
-			}
-		}
+		// @2017-06-18: don't inject if not annotated
+		// it can be "unsafe" as you don't specify the source and it can intervene with lambda inputs etc
+//		else {
+//			// try from the GET
+//			if (queryParameters != null) {
+//				value = fromParameters(queryParameters, variableName);
+//			}
+//			// try from POST
+//			if (value == null && formParameters != null) {
+//				value = fromParameters(formParameters, variableName);
+//			}
+//			// try from headers
+//			if (value == null) {
+//				String headerName = variableName.replaceAll("([A-Z])", "-$1");
+//				if (headerName.startsWith("-")) {
+//					headerName = headerName.substring(1);
+//				}
+//				Header header = MimeUtils.getHeader(headerName, entity.getContent().getHeaders());
+//				if (header != null) {
+//					value = header.getValue();
+//				}
+//			}
+//		}
 		if (executor.getContext().getAnnotations().containsKey("sanitize")) {
 			value = sanitize(value);
 		}
@@ -1330,6 +1356,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		if (parameters.containsKey(variableName)) {
 			if (((List<?>) parameters.get(variableName)).size() == 1) {
 				return ((List<?>) parameters.get(variableName)).get(0);
+			}
+			else if (!GlueUtils.getVersion().contains(1.0)) {
+				return (List<?>) parameters.get(variableName);
 			}
 			else {
 				return ScriptMethods.array(((List<?>) parameters.get(variableName)).toArray());

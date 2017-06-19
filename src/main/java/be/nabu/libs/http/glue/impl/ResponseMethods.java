@@ -23,6 +23,7 @@ import be.nabu.glue.impl.TransactionalCloseable;
 import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.api.HTTPEntity;
+import be.nabu.libs.http.api.HTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.libs.http.glue.GlueListener;
 import be.nabu.libs.types.ComplexContentWrapperFactory;
@@ -36,6 +37,7 @@ import be.nabu.utils.io.api.ByteBuffer;
 import be.nabu.utils.io.api.ReadableContainer;
 import be.nabu.utils.mime.api.Header;
 import be.nabu.utils.mime.api.ModifiableHeader;
+import be.nabu.utils.mime.api.ModifiablePart;
 import be.nabu.utils.mime.impl.FormatException;
 import be.nabu.utils.mime.impl.MimeHeader;
 import be.nabu.utils.mime.impl.MimeUtils;
@@ -48,6 +50,7 @@ public class ResponseMethods {
 	public static final List<String> allowedTypes = Arrays.asList(MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML);
 	public static final String RESPONSE_HEADERS = "responseHeaders";
 	public static final String RESPONSE_STREAM = "responseStream";
+	public static final String RESPONSE_PART = "responsePart";
 	public static final String RESPONSE_CHARSET = "responseCharset";
 	public static final String RESPONSE_DEFAULT_CHARSET = "responseDefaultCharset";
 	public static final String RESPONSE_PREFERRED_TYPE = "responsePreferredType";
@@ -133,6 +136,13 @@ public class ResponseMethods {
 			removeHeader("Content-Length");
 			removeHeader("Content-Type");
 			contentType = null;
+		}
+		else if (response instanceof ModifiablePart) {
+			ScriptRuntime.getRuntime().getContext().put(RESPONSE_PART, response);
+		}
+		else if (response instanceof HTTPResponse) {
+			ScriptRuntime.getRuntime().getContext().put(RESPONSE_PART, ((HTTPResponse) response).getContent());
+			code(((HTTPResponse) response).getCode());
 		}
 		else if (response instanceof InputStream) {
 			// IMPORTANT: There was an issue with the stream being set as content being closed by the time it was used for the response (this ended up in 0-byte downloads)
@@ -242,9 +252,12 @@ public class ResponseMethods {
 		return charset;
 	}
 	
-	public static void redirect(String location, Boolean permanent) throws ParseException, IOException, FormatException {
+	public static void redirect(@GlueParam(name = "location") String location, @GlueParam(name = "permanent") Boolean permanent, @GlueParam(name = "code") Integer code) throws ParseException, IOException, FormatException {
 		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
-		ResponseMethods.code(permanent != null && permanent ? 301 : ("get".equalsIgnoreCase(RequestMethods.method()) ? 307 : 303));
+		if (code == null) {
+			code = permanent != null && permanent ? 301 : ("get".equalsIgnoreCase(RequestMethods.method()) ? 307 : 303);
+		}
+		ResponseMethods.code(code);
 		// in RFC https://tools.ietf.org/html/rfc2616#section-14.30 it states that location has to be absolute
 		// however in RFC https://tools.ietf.org/html/rfc7231#section-7.1.2 which superceeds the previous RFC, it states that the location can be relative
 		// the latter RFC is active since mid-2014

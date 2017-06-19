@@ -27,7 +27,11 @@ import be.nabu.libs.http.HTTPException;
 import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.api.HTTPRequest;
 import be.nabu.libs.http.api.LinkableHTTPResponse;
+import be.nabu.libs.http.api.server.AuthenticationHeader;
+import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.libs.http.glue.GlueListener;
+import be.nabu.libs.http.server.BasicAuthenticationHandler;
+import be.nabu.libs.http.server.FixedRealmHandler;
 import be.nabu.libs.metrics.api.MetricInstance;
 
 @MethodProviderClass(namespace = "user")
@@ -185,6 +189,14 @@ public class UserMethods {
 		return false;
 	}
 	
+	public static boolean refreshable() {
+		Token token = token();
+		if (token == null) {
+			token = (Token) ScriptRuntime.getRuntime().getContext().get(INVALID_TOKEN);
+		}
+		return token != null && token instanceof RefreshableToken;
+	}
+	
 	@GlueMethod(description = "Tries to refresh an existing token that may have expired")
 	public static boolean refresh() {
 		Token token = token();
@@ -210,9 +222,11 @@ public class UserMethods {
 		return false;
 	}
 	
-	private static void setToken(Token token) {
-		SessionMethods.create(true);
-		SessionMethods.set(GlueListener.buildTokenName(token.getRealm()), token);
+	private static void setToken(Token token, boolean persist) {
+		if (persist) {
+			SessionMethods.create(true);
+			SessionMethods.set(GlueListener.buildTokenName(token.getRealm()), token);
+		}
 		ExecutionContext context = ScriptRuntime.getRuntime() == null ? null : ScriptRuntime.getRuntime().getExecutionContext();
 		if (context instanceof SecurityUpgradeable) {
 			((SecurityUpgradeable) context).setPrincipal(token);
@@ -226,7 +240,7 @@ public class UserMethods {
 			realm = originalToken == null ? realm() : originalToken.getRealm();
 		}
 		Token token = new ImpersonateToken(originalToken, realm, name);
-		setToken(token);
+		setToken(token, originalToken != null);
 	}
 	
 	@GlueMethod(description = "Checks whether you are pretending to be someone else")
@@ -238,7 +252,10 @@ public class UserMethods {
 	public static void unimpersonate() {
 		Token token = token();
 		if (token instanceof ImpersonateToken) {
-			setToken(((ImpersonateToken) token).getOriginalToken());
+			setToken(((ImpersonateToken) token).getOriginalToken(), true);
+		}
+		else {
+			setToken(null, false);
 		}
 	}
 	
@@ -263,7 +280,7 @@ public class UserMethods {
 						new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getHost(RequestMethods.headers(null)))
 					));
 					if (token != null) {
-						setToken(token);
+						setToken(token, true);
 						return true;
 					}
 					else {
@@ -309,7 +326,8 @@ public class UserMethods {
 	
 	@GlueMethod(description = "Allows you to retrieve the token for the user")
 	public static Token token() {
-		return (Token) SessionMethods.get(GlueListener.buildTokenName(realm()));
+//		Token token = (Token) SessionMethods.get(GlueListener.buildTokenName(realm()));
+		return (Token) ScriptRuntime.getRuntime().getExecutionContext().getPrincipal();
 	}
 	
 	@GlueMethod(description = "Allows you to retrieve the device for the user")
@@ -349,9 +367,13 @@ public class UserMethods {
 	public static boolean authenticate( 
 			@GlueParam(name = "name", description = "The user name") final String name, 
 			@GlueParam(name = "password", description = "The user password") final String password,
-			@GlueParam(name = "remember", description = "Whether or not to remember this login", defaultValue = "true") final Boolean remember) {
+			@GlueParam(name = "remember", description = "Whether or not to remember this login", defaultValue = "true") final Boolean remember,
+			@GlueParam(name = "persist", description = "Whether or not to persist this login in a session", defaultValue = "true") Boolean persist) {
 		if (isBlacklisted()) {
 			throw new HTTPException(429);
+		}
+		if (persist == null) {
+			persist = true;
 		}
 		String realm = realm();
 		Authenticator authenticator = (Authenticator) ScriptRuntime.getRuntime().getContext().get(AUTHENTICATOR);
@@ -362,11 +384,25 @@ public class UserMethods {
 				deviceId = UUID.randomUUID().toString().replace("-", "");
 				isNewDevice = true;
 			}
-			Token token = authenticator.authenticate(realm, new BasicPrincipalImplementation(
-				password, 
-				name, 
-				new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getHost(RequestMethods.headers(null)))
-			));
+			Token token;
+			if (name == null) {
+				BasicAuthenticationHandler handler = new BasicAuthenticationHandler(authenticator, new FixedRealmHandler(realm));
+				handler.handle((HTTPRequest) RequestMethods.entity());
+				AuthenticationHeader authenticationHeader = HTTPUtils.getAuthenticationHeader(RequestMethods.entity());
+				if (authenticationHeader == null) {
+					return false;
+				}
+				else {
+					token = authenticationHeader.getToken();
+				}
+			}
+			else {
+				token = authenticator.authenticate(realm, new BasicPrincipalImplementation(
+					password, 
+					name, 
+					new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getHost(RequestMethods.headers(null)))
+				));
+			}
 			// if it's a new device, set a cookie for it
 			if (token != null && isNewDevice) {
 				ResponseMethods.cookie(
@@ -403,7 +439,7 @@ public class UserMethods {
 			}
 			// recreate the session to prevent session spoofing
 			if (token != null) {
-				setToken(token);
+				setToken(token, persist);
 				return true;
 			}
 			else {
