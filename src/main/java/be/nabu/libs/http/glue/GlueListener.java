@@ -1529,13 +1529,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				// the response the server gave _has_ to be verified each time before it is served to the user, this can be met with 304 however
 				values.add("no-cache");
 				// this basically says that once the content is stale, it _must_ be retrieved from the server
-				values.add("must-revalidate");
+//				values.add("must-revalidate");
 				// no-store means that the response can never be stored, so it is stricter than no-cache in that the server can no longer send back a 304
 			}
 			if (isPrivate != null && isPrivate) {
 				values.add("private");
 			}
-			else {
+			else if (!values.contains("no-cache")) {
 				values.add(PUBLIC);
 			}
 			StringBuilder builder = new StringBuilder();
