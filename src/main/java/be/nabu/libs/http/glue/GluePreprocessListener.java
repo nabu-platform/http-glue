@@ -19,12 +19,15 @@ import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.authentication.api.TokenValidator;
 import be.nabu.libs.events.api.EventHandler;
+import be.nabu.libs.http.HTTPCodes;
 import be.nabu.libs.http.HTTPException;
+import be.nabu.libs.http.api.HTTPEntity;
 import be.nabu.libs.http.api.HTTPRequest;
 import be.nabu.libs.http.api.server.AuthenticationHeader;
 import be.nabu.libs.http.api.server.Session;
 import be.nabu.libs.http.api.server.SessionProvider;
 import be.nabu.libs.http.core.DefaultHTTPRequest;
+import be.nabu.libs.http.core.DefaultHTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.libs.http.glue.impl.GlueHTTPFormatter;
 import be.nabu.libs.http.glue.impl.RequestMethods;
@@ -37,10 +40,11 @@ import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.mime.api.Header;
 import be.nabu.utils.mime.api.ModifiablePart;
 import be.nabu.utils.mime.impl.MimeHeader;
+import be.nabu.utils.mime.impl.MimeUtils;
 import be.nabu.utils.mime.impl.PlainMimeContentPart;
 import be.nabu.utils.mime.impl.PlainMimeEmptyPart;
 
-public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPRequest> {
+public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPEntity> {
 
 	private ScriptRepository repository;
 	private boolean refresh;
@@ -63,7 +67,7 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 	
 	@SuppressWarnings("unchecked")
 	@Override
-	public HTTPRequest handle(HTTPRequest request) {
+	public HTTPEntity handle(HTTPRequest request) {
 		try {
 			if (refresh) {
 				repository.refresh();
@@ -169,6 +173,23 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPReq
 			List<Header> headers = (List<Header>) runtime.getContext().get(ResponseMethods.RESPONSE_HEADERS);
 			if (headers == null) {
 				headers = new ArrayList<Header>();
+			}
+			else {
+				// you performed a redirect, let's send it back immediately
+				Header locationHeader = MimeUtils.getHeader("Location", headers.toArray(new Header[headers.size()]));
+				if (locationHeader != null) {
+					Integer code = (Integer) runtime.getContext().get(ResponseMethods.RESPONSE_CODE);
+					if (code == null) {
+						code = 307;
+					}
+					PlainMimeEmptyPart part = new PlainMimeEmptyPart(null, headers.toArray(new Header[headers.size()]));
+					part.removeHeader("Content-Length");
+					part.removeHeader("Transfer-Encoding");
+					part.removeHeader("Content-Encoding");
+					part.setHeader(new MimeHeader("Content-Length", "0"));
+					DefaultHTTPResponse response = new DefaultHTTPResponse(request, code, HTTPCodes.getMessage(code), part);
+					return response;
+				}
 			}
 			// if no new content is set, use original content unless explicitly set to null
 			Boolean responseIsEmpty = (Boolean) runtime.getContext().get(ResponseMethods.RESPONSE_EMPTY);

@@ -58,6 +58,7 @@ import be.nabu.libs.authentication.impl.DeviceImpl;
 import be.nabu.libs.cache.api.Cache;
 import be.nabu.libs.cache.api.CacheEntry;
 import be.nabu.libs.cache.api.CacheProvider;
+import be.nabu.libs.cache.api.CacheWithHash;
 import be.nabu.libs.cache.api.ExplorableCache;
 import be.nabu.libs.converter.ConverterFactory;
 import be.nabu.libs.converter.api.Converter;
@@ -135,7 +136,7 @@ import be.nabu.utils.mime.impl.PlainMimePart;
  * 
  */
 public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
-
+	
 	private MetricInstance metrics;
 	public static final String PUBLIC = "public";
 	private static final String CSRF_TOKEN = "csrfToken";
@@ -262,9 +263,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		this.charset = charset;
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
 	public HTTPResponse handle(HTTPRequest request) {
+		return handle(request, false);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public HTTPResponse handle(HTTPRequest request, boolean isCacheRefresh) {
 		if (refreshScripts) {
 			try {
 				repository.refresh();
@@ -493,6 +498,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			Long maxAge = null;
 			Boolean revalidate = null;
 			Boolean isPrivate = null;
+			boolean storeRequest = false;
 			// add caching if necessary
 			// even if we don't have a cache provider, we want to set the cache header correctly for upstream caching
 			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("cache")) {
@@ -502,6 +508,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						part = part.trim();
 						if (part.equals("revalidate")) {
 							revalidate = true;
+						}
+						// if we want the ability to refresh, we need to store the request as well for replay
+						else if (part.equals("refresh")) {
+							storeRequest = true;
 						}
 						else if (part.equals("private")) {
 							isPrivate = true;
@@ -525,10 +535,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			StringBuilder serializedCacheKey = null;
 			String serializedCacheKeyString = null;
 			String cacheHash = null;
-			Cache cache = isCacheable ? cacheProvider.get(ScriptUtils.getFullName(script)) : null;
+			String cacheId = ScriptUtils.getFullName(script);
+			Cache cache = isCacheable ? cacheProvider.get(cacheId) : null;
 			// check the cache for the script
-			if (cache != null) {
+			if (cache != null && !isCacheRefresh) {
 				serializedCacheKey = new StringBuilder();
+				// we start the cache key with the id of the cache container for refreshing purposes
+				serializedCacheKey.append(cacheId).append(":");
 				boolean first = true;
 				for (String key : input.keySet()) {
 					if (first) {
@@ -557,48 +570,41 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				}
 				
 				if (serializedCacheKey != null) {
+					boolean firstCacheKey = true;
 					// check for additional enrichment of the cache key for this page
 					for (CacheKeyProvider provider : cacheKeyProviders) {
 						String additionalCacheKey = provider.getAdditionalCacheKey(request, token, script);
 						if (additionalCacheKey != null) {
-							serializedCacheKey.append("&").append(additionalCacheKey.replace("&", "%amp;").replace("=", "%eql;"));
+							serializedCacheKey.append(firstCacheKey ? "&&" : "&").append(additionalCacheKey.replace("&", "%amp;").replace("=", "%eql;"));
+							firstCacheKey = false;
 						}
 					}
 					
 					Header lastModifiedHeader = null;
 					serializedCacheKeyString = serializedCacheKey.toString();
-					cacheHash = hash(serializedCacheKeyString.getBytes(Charset.forName("UTF-8")), "MD5");
-					
-					boolean isDifferentEtag = false;
-					if (request.getContent() != null) {
-						Header header = MimeUtils.getHeader("If-None-Match", request.getContent().getHeaders());
-						if (header != null && header.getValue() != null) {
-							if (!cacheHash.equals(header.getValue())) {
-								isDifferentEtag = true;
-							}
-						}
-					}
-					
+
+					// first we check last modified as this should be the cheapest check
 					Date lastModified = null;
-					
 					// check for non-modified things
-					if (cache instanceof ExplorableCache && !isDifferentEtag) {
+					if (cache instanceof ExplorableCache) {
 						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKeyString);
 						if (entry != null) {
 							lastModified = entry.getLastModified();
+							// zero out the milliseconds for correct comparison
+							lastModified = new Date(lastModified.getTime() - (lastModified.getTime() % 1000));
 							lastModifiedHeader = new MimeHeader("Last-Modified", HTTPUtils.formatDate(lastModified));
 							if (request.getContent() != null) {
 								Header header = MimeUtils.getHeader("If-Modified-Since", request.getContent().getHeaders());
 								if (header != null && header.getValue() != null) {
 									Date ifModifiedSince = HTTPUtils.parseDate((String) header.getValue());
-									if (!ifModifiedSince.after(lastModified)) {
+									if (!ifModifiedSince.before(lastModified)) {
 										// if it has not been modified, send back a 304
 										DefaultHTTPResponse unchangedResponse = new DefaultHTTPResponse(304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
 											new MimeHeader("Content-Length", "0"), 
 											cacheHeader,
 											lastModifiedHeader
 										));
-										if (maxAge != null) {
+										if (maxAge != null && maxAge > 0) {
 											unchangedResponse.getContent().setHeader(buildExpireHeader(lastModified, maxAge));
 										}
 										return unchangedResponse;
@@ -607,7 +613,39 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 							}
 						}
 					}
+
+					// if the last modified is not present/can not be calculated/has been modified according to the date _and_ we have an etag, check that
+					if (cache instanceof CacheWithHash) {
+						cacheHash = ((CacheWithHash) cache).hash(serializedCacheKeyString);
+						
+						if (cacheHash != null) {
+							if (request.getContent() != null) {
+								Header header = MimeUtils.getHeader("If-None-Match", request.getContent().getHeaders());
+								if (header != null && header.getValue() != null) {
+									// if the etag still matches, send back a 304
+									if (cacheHash.equals(header.getValue())) {
+										// if it has not been modified, send back a 304
+										DefaultHTTPResponse unchangedResponse = new DefaultHTTPResponse(304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
+											new MimeHeader("Content-Length", "0"), 
+											new MimeHeader("ETag", cacheHash),
+											cacheHeader
+										));
+										// we don't set these headers because we may here because the last modified was updated but the content was not
+										// if however we send back this updated last modified, the browser will (on the next call) do an actual get without any of the cache headers
+//										if (lastModifiedHeader != null) {
+//											unchangedResponse.getContent().setHeader(lastModifiedHeader);
+//										}
+//										if (maxAge != null && lastModified != null) {
+//											unchangedResponse.getContent().setHeader(buildExpireHeader(lastModified, maxAge));
+//										}
+										return unchangedResponse;
+									}
+								}
+							}
+						}
+					}
 					
+					// if we have a response from cache, return that
 					HTTPResponse response = (HTTPResponse) cache.get(serializedCacheKeyString);
 					if (response != null) {
 						if (response.getContent() instanceof ContentPart) {
@@ -625,7 +663,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 							if (lastModifiedHeader != null) {
 								response.getContent().setHeader(lastModifiedHeader);
 							}
-							if (lastModified != null && maxAge != null) {
+							if (lastModified != null && maxAge != null && maxAge > 0) {
 								response.getContent().setHeader(buildExpireHeader(lastModified, maxAge));
 							}
 							response.getContent().setHeader(cacheHeader);
@@ -652,8 +690,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 								);
 								response.getContent().setHeader(cookieHeader);
 							}
-							// set etags to identify the cached instance
-							response.getContent().setHeader(new MimeHeader("ETag", cacheHash));
+							if (cacheHash != null) {
+								// set etags to identify the cached instance
+								response.getContent().setHeader(new MimeHeader("ETag", cacheHash));
+							}
 						}
 						return response;
 					}
@@ -879,23 +919,30 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			DefaultHTTPResponse response = new DefaultHTTPResponse(request, code, HTTPCodes.getMessage(code), part);
 			
 			// check if we want to cache the response
-			if (cache != null && serializedCacheKeyString != null) {
+			if (cache != null && serializedCacheKeyString != null && !isCacheRefresh) {
 				// the response should not contain any set-cookie commands
 				Header[] cookieHeaders = MimeUtils.getHeaders("Set-Cookie", response.getContent().getHeaders());
 				if (cookieHeaders == null || cookieHeaders.length == 0) {
 					cache.put(serializedCacheKeyString, response);
+					if (storeRequest) {
+						cache.put("request==" + serializedCacheKeyString, request);
+					}
 					// if the content for the response was a stream, it will be read by the caching routine, we need to reopen it from cache
 					if (stream != null) {
 						response = (DefaultHTTPResponse) cache.get(serializedCacheKeyString);
 					}
+					// set the etag is applicable
+					if (cache instanceof CacheWithHash) {
+						response.getContent().setHeader(new MimeHeader("ETag", ((CacheWithHash) cache).hash(serializedCacheKeyString)));
+					}
+					// set the last-modified & expires if applicable
 					if (cache instanceof ExplorableCache) {
 						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKeyString);
 						if (entry != null) {
 							response.getContent().setHeader(
-								new MimeHeader("ETag", cacheHash),
 								new MimeHeader("Last-Modified", HTTPUtils.formatDate(entry.getLastModified()))
 							);
-							if (maxAge != null) {
+							if (maxAge != null && maxAge > 0) {
 								response.getContent().setHeader(buildExpireHeader(entry.getLastModified(), maxAge));
 							}
 						}
@@ -905,14 +952,17 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					logger.warn("Page {} is skipping cache because response cookies were detected", script);
 				}
 			}
-			// always set the cache header to avoid confusion
-			response.getContent().setHeader(cacheHeader);
-			
-			if (setChunked) {
-				response.getContent().setHeader(new MimeHeader("Transfer-Encoding", "chunked"));
-			}
-			if (allowEncoding && part instanceof ContentPart) {
-				HTTPUtils.setContentEncoding(part, request.getContent().getHeaders());
+
+			// set some additional headers if we are not doing a cache refresh
+			if (!isCacheRefresh) {
+				// always set the cache header to avoid confusion
+				response.getContent().setHeader(cacheHeader);
+				if (setChunked) {
+					response.getContent().setHeader(new MimeHeader("Transfer-Encoding", "chunked"));
+				}
+				if (allowEncoding && part instanceof ContentPart) {
+					HTTPUtils.setContentEncoding(part, request.getContent().getHeaders());
+				}
 			}
 			return response;
 		}
@@ -1521,16 +1571,20 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		else {
 			// the cache headers are explained clearly here: https://developers.google.com/web/fundamentals/performance/optimizing-content-efficiency/http-caching?hl=en
 			List<String> values = new ArrayList<String>();
-			// if maxage is 0, we want to cache forever, however a max-age of 0 means the entry is stale
-			if (maxAge != null && maxAge != 0) {
-				values.add("max-age=" + maxAge);
-			}
 			if (revalidate != null && revalidate) {
 				// the response the server gave _has_ to be verified each time before it is served to the user, this can be met with 304 however
 				values.add("no-cache");
+				// it is immediately stale
+				values.add("max-age=0");
+				// and must be revalidated before use
+				values.add("must-revalidate");
 				// this basically says that once the content is stale, it _must_ be retrieved from the server
 //				values.add("must-revalidate");
 				// no-store means that the response can never be stored, so it is stricter than no-cache in that the server can no longer send back a 304
+			}
+			// if maxage is 0, we want to cache forever, however a max-age of 0 means the entry is stale
+			if (maxAge != null && maxAge != 0) {
+				values.add("max-age=" + maxAge);
 			}
 			if (isPrivate != null && isPrivate) {
 				values.add("private");
