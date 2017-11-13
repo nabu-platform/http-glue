@@ -918,8 +918,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			DefaultHTTPResponse response = new DefaultHTTPResponse(request, code, HTTPCodes.getMessage(code), part);
 			
-			// check if we want to cache the response
-			if (cache != null && serializedCacheKeyString != null && !isCacheRefresh) {
+			// check if we want to cache the response (only cache positive responses)
+			if (cache != null && serializedCacheKeyString != null && !isCacheRefresh && response.getCode() >= 200 && response.getCode() < 300) {
 				// the response should not contain any set-cookie commands
 				Header[] cookieHeaders = MimeUtils.getHeaders("Set-Cookie", response.getContent().getHeaders());
 				if (cookieHeaders == null || cookieHeaders.length == 0) {

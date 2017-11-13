@@ -12,6 +12,7 @@ import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.Device;
 import be.nabu.libs.authentication.api.PermissionHandler;
+import be.nabu.libs.authentication.api.PotentialPermissionHandler;
 import be.nabu.libs.authentication.api.RefreshableToken;
 import be.nabu.libs.authentication.api.RoleHandler;
 import be.nabu.libs.authentication.api.Token;
@@ -161,6 +162,7 @@ public class UserMethods {
 	public static final String ROLE_HANDLER = "roleHandler";
 	public static final String TOKEN_VALIDATOR = "tokenValidator";
 	public static final String PERMISSION_HANDLER = "permissionHandler";
+	public static final String POTENTIAL_PERMISSION_HANDLER = "potentialPermissionHandler";
 	public static final String TOKEN = "token";
 	public static final String REALM = "realm";
 	public static final String LOGIN_BLACKLIST = "loginBlacklist";
@@ -485,6 +487,16 @@ public class UserMethods {
 		// the token can be null, in that case the role handler is supposed to check for anonymous access
 		// note that if no handler is set, the user automatically has permission
 		return handler == null || handler.hasPermission(token, context, action);
+	}
+	
+	@GlueMethod(description = "Checks if a user potentially has the permission to do something")
+	public static boolean hasPotentialPermission(@GlueParam(name = "action", description = "The action you want to perform on the context") String action) {
+		String realm = realm();
+		Token token = (Token) SessionMethods.get(GlueListener.buildTokenName(realm));
+		PotentialPermissionHandler handler = (PotentialPermissionHandler) ScriptRuntime.getRuntime().getContext().get(POTENTIAL_PERMISSION_HANDLER);
+		// the token can be null, in that case the role handler is supposed to check for anonymous access
+		// note that if no handler is set, the user automatically has permission
+		return handler == null || handler.hasPotentialPermission(token, action);
 	}
 	
 	@GlueMethod(description = "Generates a new salt")

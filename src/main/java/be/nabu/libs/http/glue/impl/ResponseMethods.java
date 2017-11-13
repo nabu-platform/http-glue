@@ -254,6 +254,10 @@ public class ResponseMethods {
 	
 	public static void redirect(@GlueParam(name = "location") String location, @GlueParam(name = "permanent") Boolean permanent, @GlueParam(name = "code") Integer code) throws ParseException, IOException, FormatException {
 		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
+		// response code 302 is dubious, some clients do the new call with the original method, some don't (nodejs in particular does not)
+		// response code 303 and 307 were added to distinguish clearly between the two
+		// where 303 means: if it was a post (or any non-get), change it to a get
+		// and 307 means: do the exact same call again
 		if (code == null) {
 			code = permanent != null && permanent ? 301 : ("get".equalsIgnoreCase(RequestMethods.method()) ? 307 : 303);
 		}
