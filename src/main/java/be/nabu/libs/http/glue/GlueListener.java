@@ -583,38 +583,16 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					Header lastModifiedHeader = null;
 					serializedCacheKeyString = serializedCacheKey.toString();
 
-					// first we check last modified as this should be the cheapest check
-					Date lastModified = null;
-					// check for non-modified things
-					if (cache instanceof ExplorableCache) {
-						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKeyString);
-						if (entry != null) {
-							lastModified = entry.getLastModified();
-							// zero out the milliseconds for correct comparison
-							lastModified = new Date(lastModified.getTime() - (lastModified.getTime() % 1000));
-							lastModifiedHeader = new MimeHeader("Last-Modified", HTTPUtils.formatDate(lastModified));
-							if (request.getContent() != null) {
-								Header header = MimeUtils.getHeader("If-Modified-Since", request.getContent().getHeaders());
-								if (header != null && header.getValue() != null) {
-									Date ifModifiedSince = HTTPUtils.parseDate((String) header.getValue());
-									if (!ifModifiedSince.before(lastModified)) {
-										// if it has not been modified, send back a 304
-										DefaultHTTPResponse unchangedResponse = new DefaultHTTPResponse(304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
-											new MimeHeader("Content-Length", "0"), 
-											cacheHeader,
-											lastModifiedHeader
-										));
-										if (maxAge != null && maxAge > 0) {
-											unchangedResponse.getContent().setHeader(buildExpireHeader(lastModified, maxAge));
-										}
-										return unchangedResponse;
-									}
-								}
-							}
-						}
-					}
-
-					// if the last modified is not present/can not be calculated/has been modified according to the date _and_ we have an etag, check that
+					// check if the etag is correct (no etag is assumed correct)
+					boolean etagCorrect = true;
+					// we check the hash first
+					// the usecase we had: translated pages and you switch between translations
+					// suppose cache A is built before cache B (important for the last modified)
+					// you load B, then you load A
+					// A is not modified after B's last modified
+					// so we just say: no problem
+					// but you _did_ switch translations
+					// for this reason we _need_ to check if the etag matches to see if we are even requesting the same thing
 					if (cache instanceof CacheWithHash) {
 						cacheHash = ((CacheWithHash) cache).hash(serializedCacheKeyString);
 						
@@ -640,11 +618,46 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 //										}
 										return unchangedResponse;
 									}
+									else {
+										etagCorrect = false;
+									}
 								}
 							}
 						}
 					}
 					
+					// first we check last modified as this should be the cheapest check
+					Date lastModified = null;
+					// check for non-modified things
+					if (cache instanceof ExplorableCache) {
+						CacheEntry entry = ((ExplorableCache) cache).getEntry(serializedCacheKeyString);
+						if (entry != null) {
+							lastModified = entry.getLastModified();
+							// zero out the milliseconds for correct comparison
+							lastModified = new Date(lastModified.getTime() - (lastModified.getTime() % 1000));
+							lastModifiedHeader = new MimeHeader("Last-Modified", HTTPUtils.formatDate(lastModified));
+							// only actually check the last modified if the etag is correct
+							if (request.getContent() != null && etagCorrect) {
+								Header header = MimeUtils.getHeader("If-Modified-Since", request.getContent().getHeaders());
+								if (header != null && header.getValue() != null) {
+									Date ifModifiedSince = HTTPUtils.parseDate((String) header.getValue());
+									if (!ifModifiedSince.before(lastModified)) {
+										// if it has not been modified, send back a 304
+										DefaultHTTPResponse unchangedResponse = new DefaultHTTPResponse(304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
+											new MimeHeader("Content-Length", "0"), 
+											cacheHeader,
+											lastModifiedHeader
+										));
+										if (maxAge != null && maxAge > 0) {
+											unchangedResponse.getContent().setHeader(buildExpireHeader(lastModified, maxAge));
+										}
+										return unchangedResponse;
+									}
+								}
+							}
+						}
+					}
+
 					// if we have a response from cache, return that
 					HTTPResponse response = (HTTPResponse) cache.get(serializedCacheKeyString);
 					if (response != null) {
