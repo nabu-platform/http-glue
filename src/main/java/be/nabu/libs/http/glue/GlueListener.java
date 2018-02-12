@@ -1038,7 +1038,25 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	}
 	
 	public static PathAnalysis analyzePath(String pathValue) {
-		String regex = pathValue.replaceAll("\\{[^/}:\\s]+[\\s]*:[\\s]*([^}\\s]+)[\\s]*\\}", "($1)").replaceAll("\\{[^}/]+\\}", "([^/]+)");
+		return analyzePath(pathValue, null);
+	}
+	
+	public static PathAnalysis analyzePath(String pathValue, Map<String, String> regexes) {
+		// replace the "fixed" regexes, where you explicitly define a regex in the path
+		String regex = pathValue.replaceAll("\\{[^/}:\\s]+[\\s]*:[\\s]*([^}\\s]+)[\\s]*\\}", "($1)");
+		
+		// replace implicit regexes where additional regex logic is added externally
+		// for example suppose we know a field is numeric, we might prefeed it with a number-only regex
+		// this to get more accurate matches
+		if (regexes != null) {
+			for (String key : regexes.keySet()) {
+				regex = regex.replaceAll("\\{[\\s]*" + key + "[\\s]*\\}", "(" + regexes.get(key) + ")");
+			}
+		}
+		
+		// replace the remainder of the fields that have no explicit or implicit regex
+		// the lookahead for letters is because the regexes themselves in the above may contain for example [0-9]{4}, however in that case it is (almost?) always purely numeric
+		regex = regex.replaceAll("\\{(?=[a-zA-Z]+)[^}/]+\\}", "([^/]+)");
 		Pattern pattern = Pattern.compile("\\{([^}]+)\\}");
 		Matcher matcher = pattern.matcher(pathValue);
 		List<String> pathParameters = new ArrayList<String>();
