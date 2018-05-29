@@ -28,7 +28,9 @@ public class SessionMethods {
 		if (session == null) {
 			session = create(false);
 		}
-		session.set(key, value);
+		if (session != null) {
+			session.set(key, value);
+		}
 	}
 	
 	public static void destroy() {
@@ -71,5 +73,9 @@ public class SessionMethods {
 		ScriptRuntime runtime = ScriptRuntime.getRuntime();
 		SessionProvider provider = (SessionProvider) runtime.getContext().get(SESSION_PROVIDER);
 		return GlueListener.getSession(provider, runtime);
+	}
+	
+	public static boolean hasSessionProvider() {
+		return ScriptRuntime.getRuntime().getContext().get(SESSION_PROVIDER) != null;
 	}
 }

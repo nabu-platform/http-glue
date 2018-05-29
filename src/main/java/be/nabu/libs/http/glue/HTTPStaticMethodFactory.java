@@ -6,6 +6,7 @@ import java.util.List;
 import be.nabu.glue.core.api.StaticMethodFactory;
 import be.nabu.libs.http.glue.impl.RequestMethods;
 import be.nabu.libs.http.glue.impl.ResponseMethods;
+import be.nabu.libs.http.glue.impl.SassMethods;
 import be.nabu.libs.http.glue.impl.ServerMethods;
 import be.nabu.libs.http.glue.impl.SessionMethods;
 import be.nabu.libs.http.glue.impl.UserMethods;
@@ -20,6 +21,7 @@ public class HTTPStaticMethodFactory implements StaticMethodFactory {
 		classes.add(UserMethods.class);
 		classes.add(ResponseMethods.class);
 		classes.add(RequestMethods.class);
+		classes.add(SassMethods.class);
 		return classes;
 	}
 	

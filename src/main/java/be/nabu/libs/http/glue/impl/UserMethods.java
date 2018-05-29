@@ -375,7 +375,7 @@ public class UserMethods {
 			throw new HTTPException(429);
 		}
 		if (persist == null) {
-			persist = true;
+			persist = SessionMethods.hasSessionProvider();
 		}
 		String realm = realm();
 		Authenticator authenticator = (Authenticator) ScriptRuntime.getRuntime().getContext().get(AUTHENTICATOR);

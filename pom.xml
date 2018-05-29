@@ -69,6 +69,10 @@
 			<groupId>be.nabu.glue</groupId>
 			<artifactId>glue-json</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>be.nabu.libs.http</groupId>
+			<artifactId>http-sass</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>be.nabu.libs.resources</groupId>

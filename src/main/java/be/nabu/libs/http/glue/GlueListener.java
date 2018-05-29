@@ -310,6 +310,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			Map<String, String> pathParameters = new HashMap<String, String>();
 			Script script = repository.getScript(path);
+			
 			String scriptPath = path;
 			if (script == null && allowPathLookup) {
 				// check if the index script has a path annotation
@@ -389,9 +390,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				// note that if the token was already null, we don't destroy the session, it could be a guest session
 				if (token != null && !tokenValidator.isValid(token)) {
 					invalidToken = token;
-					session.destroy();
 					originalSessionId = null;
-					session = null;
+					if (session != null) {
+						session.destroy();
+						session = null;
+					}
 					token = null;
 				}
 			}
@@ -457,7 +460,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			Map formParameters = null;
 			if (request.getContent() instanceof ParsedMimeFormPart) {
 				formParameters = ((ParsedMimeFormPart) request.getContent()).getValues();
-				if (formParameters != null && addCsrfCheck && !noCsrf) {
+				if (formParameters != null && addCsrfCheck && !noCsrf && sessionProvider != null) {
 					if (originalSessionId == null) {
 						logger.warn("Possible CSRF attack: client did not pass in required session id");
 						throw new HTTPException(500, "CSRF check failed, no session passed in client");
@@ -814,7 +817,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// if we are streaming back html code to the client (something that is rendered by the browser) we need additional protection
 			if (isHTML(contentType)) {
 				// we add (optionally) csrf checks to forms
-				if (addCsrfCheck && !noCsrf) {
+				if (addCsrfCheck && !noCsrf && sessionProvider != null) {
 					int formPosition = getFormPosition(stringContent);
 					if (formPosition >= 0) {
 						// forcibly create a session if csrf checks are required
@@ -946,7 +949,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					}
 					// set the etag is applicable
 					if (cache instanceof CacheWithHash) {
-						response.getContent().setHeader(new MimeHeader("ETag", ((CacheWithHash) cache).hash(serializedCacheKeyString)));
+						String hash = ((CacheWithHash) cache).hash(serializedCacheKeyString);
+						if (hash != null) {
+							response.getContent().setHeader(new MimeHeader("ETag", hash));
+						}
 					}
 					// set the last-modified & expires if applicable
 					if (cache instanceof ExplorableCache) {
@@ -1038,10 +1044,10 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	}
 	
 	public static PathAnalysis analyzePath(String pathValue) {
-		return analyzePath(pathValue, null);
+		return analyzePath(pathValue, null, true);
 	}
 	
-	public static PathAnalysis analyzePath(String pathValue, Map<String, String> regexes) {
+	public static PathAnalysis analyzePath(String pathValue, Map<String, String> regexes, boolean caseSensitive) {
 		// replace the "fixed" regexes, where you explicitly define a regex in the path
 		String regex = pathValue.replaceAll("\\{[^/}:\\s]+[\\s]*:[\\s]*([^}\\s]+)[\\s]*\\}", "($1)");
 		
@@ -1063,7 +1069,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		while (matcher.find()) {
 			pathParameters.add(matcher.group(1).replaceAll("[\\s]*:.*$", ""));
 		}
-		return new PathAnalysis("^" + regex, pathParameters);
+		return new PathAnalysis((caseSensitive ? "" : "(?i)") + "^" + regex, pathParameters);
 	}
 
 	public static Session getSession(SessionProvider provider, ScriptRuntime runtime) {
