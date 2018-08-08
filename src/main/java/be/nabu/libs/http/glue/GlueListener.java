@@ -194,7 +194,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	 * Whether or not to auto-check for csrf
 	 * The only reason to turn this off could be for ajax applications but even then it's best to leave it on
 	 */
-	private boolean addCsrfCheck = true;
+	private boolean addCsrfCheck = false;
 	
 	/**
 	 * Whether or not to add automatic fix for tab nabbing (https://en.wikipedia.org/wiki/Tabnabbing)

@@ -227,7 +227,13 @@ public class ResponseMethods {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public static Header cookie(String key, String value, Date expires, String path, String domain, Boolean secure, Boolean httpOnly) {
+	public static Header cookie(@GlueParam(name = "key") String key, 
+			@GlueParam(name = "value") String value, 
+			@GlueParam(name = "expires") Date expires, 
+			@GlueParam(name = "path") String path, 
+			@GlueParam(name = "domain") String domain, 
+			@GlueParam(name = "secure") Boolean secure, 
+			@GlueParam(name = "httpOnly") Boolean httpOnly) {
 		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		ModifiableHeader header = HTTPUtils.newSetCookieHeader(key, value, expires, path, domain, secure, httpOnly);
 		List<Header> headers = (List<Header>) ScriptRuntime.getRuntime().getContext().get(ResponseMethods.RESPONSE_HEADERS);
