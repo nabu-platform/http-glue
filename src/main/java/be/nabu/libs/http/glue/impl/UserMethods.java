@@ -262,7 +262,7 @@ public class UserMethods {
 	}
 	
 	@GlueMethod(description = "Tries to remember the user based on a shared secret")
-	public static boolean remember() {
+	public static boolean remember(@GlueParam(name = "persist", description = "Whether or not to persist this login in a session", defaultValue = "true") Boolean persist) {
 		if (isBlacklisted()) {
 			throw new HTTPException(429);
 		}
@@ -282,7 +282,7 @@ public class UserMethods {
 						new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getHost(RequestMethods.headers(null)))
 					));
 					if (token != null) {
-						setToken(token, true);
+						setToken(token, persist == null || persist);
 						return true;
 					}
 					else {
