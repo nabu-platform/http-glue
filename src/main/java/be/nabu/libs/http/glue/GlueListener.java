@@ -278,6 +278,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				throw new HTTPException(500, e);
 			}
 		}
+		Device device = null;
+		Token token = null;
 		try {
 			boolean secure = "true".equals(environment.getParameters().get("secure"));
 			URI uri = HTTPUtils.getURI(request, secure);
@@ -368,7 +370,6 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				session = sessionProvider.newSession();
 			}
 
-			Token token = null;
 			// first we try to get the token from the session
 			if (session != null && session.get(GlueListener.buildTokenName(realm)) != null) {
 				token = (Token) session.get(GlueListener.buildTokenName(realm));
@@ -402,7 +403,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			String deviceId = null;
 			boolean isNewDevice = false;
 			// check validity of device
-			Device device = request.getContent() == null ? null : GlueListener.getDevice(realm, request.getContent().getHeaders());
+			device = request.getContent() == null ? null : GlueListener.getDevice(realm, request.getContent().getHeaders());
 			if (device == null && deviceValidator != null) {
 				device = GlueListener.newDevice(realm, request.getContent().getHeaders());
 				deviceId = device.getDeviceId();
@@ -410,18 +411,18 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			
 			if (deviceValidator != null && !deviceValidator.isAllowed(token, device)) {
-				throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' is using an unauthorized device '" + device.getDeviceId() + "' for '" + ScriptUtils.getFullName(script) + "'");
+				throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' is using an unauthorized device '" + device.getDeviceId() + "' for '" + ScriptUtils.getFullName(script) + "'", token);
 			}
 			
 			// if we have root annotations, they may contain security annotations
 			if (script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null) {
 				if (script.getRoot().getContext().getAnnotations().containsKey("role") && roleHandler != null
 						&& !checkRole(roleHandler, token, script.getRoot().getContext().getAnnotations().get("role"))) {
-					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required role for '" + ScriptUtils.getFullName(script) + "'");
+					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required role for '" + ScriptUtils.getFullName(script) + "'", token);
 				}
 				if (script.getRoot().getContext().getAnnotations().containsKey("permission") && permissionHandler != null
 						&& !checkPermission(permissionHandler, token, script.getRoot().getContext().getAnnotations().get("permission"), pathParameters)) {
-					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required permission for '" + ScriptUtils.getFullName(script) + "'");
+					throw new HTTPException(token == null ? 401 : 403, "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have the required permission for '" + ScriptUtils.getFullName(script) + "'", token);
 				}
 			}
 			
@@ -463,23 +464,23 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				if (formParameters != null && addCsrfCheck && !noCsrf && sessionProvider != null) {
 					if (originalSessionId == null) {
 						logger.warn("Possible CSRF attack: client did not pass in required session id");
-						throw new HTTPException(500, "CSRF check failed, no session passed in client");
+						throw new HTTPException(500, "CSRF check failed, no session passed in client", token);
 					}
 					else if (formParameters.get(CSRF_TOKEN) == null) {
 						logger.warn("Possible CSRF attack: client did not pass in any csrf token");
-						throw new HTTPException(500, "CSRF check failed, no csrf token found in client response");
+						throw new HTTPException(500, "CSRF check failed, no csrf token found in client response", token);
 					}
 					if (session == null) {
 						logger.warn("Possible CSRF attack: client passed in invalid session id");
-						throw new HTTPException(500, "CSRF check failed, invalid session id passed in by client");
+						throw new HTTPException(500, "CSRF check failed, invalid session id passed in by client", token);
 					}
 					else if (session.get(CSRF_TOKEN) == null) {
 						logger.warn("Possible CSRF attack: client session valid but does not contain csrf token");
-						throw new HTTPException(500, "CSRF check failed, no csrf token in session");
+						throw new HTTPException(500, "CSRF check failed, no csrf token in session", token);
 					}
 					else if (!session.get(CSRF_TOKEN).equals(((List<?>) formParameters.get(CSRF_TOKEN)).get(0))) {
 						logger.warn("Possible CSRF attack: csrf token given by client does not match expected csrf token in session");
-						throw new HTTPException(400, "CSRF check failed, csrf token given by client does not match expected csrf token in session");
+						throw new HTTPException(400, "CSRF check failed, csrf token given by client does not match expected csrf token in session", token);
 					}
 					// if you define the token as being single use, remove the token now that it has been used so it can only be used once
 					// this is interesting for more sensitive pages like login pages etc
@@ -689,6 +690,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 								ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
 								cookieHeader.addComment("Path=" + getCookiePath());
 								cookieHeader.addComment("HttpOnly");
+								if (rememberSecureOnly) {
+									cookieHeader.addComment("Secure");
+								}
 								response.getContent().setHeader(cookieHeader);
 							}
 							if (isNewDevice) {
@@ -791,6 +795,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
 					cookieHeader.addComment("Path=" + getCookiePath());
 					cookieHeader.addComment("HttpOnly");
+					if (rememberSecureOnly) {
+						cookieHeader.addComment("Secure");
+					}
 					headers.add(cookieHeader);
 				}
 			}
@@ -827,6 +834,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 							ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
 							cookieHeader.addComment("Path=" + getCookiePath());
 							cookieHeader.addComment("HttpOnly");
+							if (rememberSecureOnly) {
+								cookieHeader.addComment("Secure");
+							}
 							headers.add(cookieHeader);
 							runtime.getContext().put(SessionMethods.SESSION, session);
 							
@@ -856,7 +866,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (contentType == null) {
 				// when streaming content, you must explicitly set the content type
 				if (stream != null) {
-					throw new HTTPException(500, "No content type set for content stream");
+					throw new HTTPException(500, "No content type set for content stream", token);
 				}
 				// we assume html if nothing is set
 				headers.add(new MimeHeader("Content-Type", "text/html; charset=" + charset.name()));
@@ -936,6 +946,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			
 			// check if we want to cache the response (only cache positive responses)
 			if (cache != null && serializedCacheKeyString != null && !isCacheRefresh && response.getCode() >= 200 && response.getCode() < 300) {
+				// remove cookies for the nabu renderer, it is of no interest to the renderer
+				String userAgent = GlueHTTPUtils.getUserAgent(request.getContent().getHeaders());
+				if (userAgent != null && userAgent.contains("Nabu-Renderer")) {
+					response.getContent().removeHeader("Set-Cookie");
+				}
 				// the response should not contain any set-cookie commands
 				Header[] cookieHeaders = MimeUtils.getHeaders("Set-Cookie", response.getContent().getHeaders());
 				if (cookieHeaders == null || cookieHeaders.length == 0) {
@@ -985,8 +1000,20 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			return response;
 		}
+		catch (HTTPException e) {
+			if (e.getDevice() == null) {
+				e.setDevice(device);
+			}
+			if (e.getToken() == null) {
+				e.setToken(token);
+			}
+			throw e;
+		}
 		catch (Exception e) {
-			throw new HTTPException(500, e);	
+			HTTPException httpException = new HTTPException(500, e);
+			httpException.setToken(token);
+			httpException.setDevice(device);
+			throw httpException;	
 		}
 	}
 
@@ -1520,14 +1547,16 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		this.roleHandler = roleHandler;
 	}
 
-	public boolean isRememberSecureOnly() {
+	public boolean isSecureCookiesOnly() {
 		return rememberSecureOnly;
+	}
+	public void setSecureCookiesOnly(boolean secureCookiesOnly) {
+		this.rememberSecureOnly = secureCookiesOnly;
 	}
 
 	public String getFilePath() {
 		return filePath;
 	}
-
 	public void setFilePath(String filePath) {
 		this.filePath = filePath;
 	}

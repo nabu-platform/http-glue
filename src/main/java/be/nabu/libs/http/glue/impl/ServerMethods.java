@@ -29,7 +29,7 @@ public class ServerMethods {
 	
 	public static void fail(String message, Integer code) {
 		getLogger().error(message);
-		throw new HTTPException(code == null ? 500 : code, message);
+		throw new HTTPException(code == null ? 500 : code, message, UserMethods.token());
 	}
 	
 	public static void info(String message) {
