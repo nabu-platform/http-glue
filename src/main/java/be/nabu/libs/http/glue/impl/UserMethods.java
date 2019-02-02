@@ -173,7 +173,7 @@ public class UserMethods {
 	
 	@SuppressWarnings("unchecked")
 	private static boolean isBlacklisted() {
-		String ip = GlueHTTPUtils.getIp(RequestMethods.headers(null));
+		String ip = GlueHTTPUtils.getIp(RequestMethods.headersArray(null));
 		if (ip != null) {
 			Map<String, Date> blacklist = (Map<String, Date>) ScriptRuntime.getRuntime().getContext().get(LOGIN_BLACKLIST);
 			if (blacklist != null) {
@@ -279,7 +279,7 @@ public class UserMethods {
 					Token token = authenticator.authenticate(realm, new SharedSecretPrincipalImplementation(
 						secret, 
 						name,
-						new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getHost(RequestMethods.headers(null)))
+						new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headersArray(null)), GlueHTTPUtils.getHost(RequestMethods.headersArray(null)))
 					));
 					if (token != null) {
 						setToken(token, persist == null || persist);
@@ -289,7 +289,7 @@ public class UserMethods {
 						forget();
 						MetricInstance metrics = ServerMethods.metrics();
 						if (metrics != null) {
-							metrics.increment(METRICS_REMEMBER_FAILED + ":" + GlueHTTPUtils.getIp(RequestMethods.headers(null)), 1);
+							metrics.increment(METRICS_REMEMBER_FAILED + ":" + GlueHTTPUtils.getIp(RequestMethods.headersArray(null)), 1);
 						}
 					}
 				}
@@ -344,7 +344,7 @@ public class UserMethods {
 			deviceId = UUID.randomUUID().toString().replace("-", "");
 			isNewDevice = true;
 		}
-		DeviceImpl device = new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getIp(RequestMethods.headers(null)));
+		DeviceImpl device = new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headersArray(null)), GlueHTTPUtils.getIp(RequestMethods.headersArray(null)));
 		// set a cookie to recognize device in the future
 		if (isNewDevice) {
 			ResponseMethods.cookie(
@@ -402,7 +402,7 @@ public class UserMethods {
 				token = authenticator.authenticate(realm, new BasicPrincipalImplementation(
 					password, 
 					name, 
-					new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headers(null)), GlueHTTPUtils.getHost(RequestMethods.headers(null)))
+					new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headersArray(null)), GlueHTTPUtils.getHost(RequestMethods.headersArray(null)))
 				));
 			}
 			// if it's a new device, set a cookie for it
@@ -448,9 +448,9 @@ public class UserMethods {
 				MetricInstance metrics = ServerMethods.metrics();
 				if (metrics != null) {
 					// this allows you to track multiple failed logins from a single ip for a single or multiple user names (non-distributed brute-force attack)
-					metrics.increment(METRICS_LOGIN_FAILED + ":" + GlueHTTPUtils.getIp(RequestMethods.headers(null)) + ":" + name, 1);
+					metrics.increment(METRICS_LOGIN_FAILED + ":" + GlueHTTPUtils.getIp(RequestMethods.headersArray(null)) + ":" + name, 1);
 					// this allows you to tracker multiple failed logins from multiple ips for a single user name (distributed brute-force attack attack)
-					metrics.increment(METRICS_USERNAME_FAILED + ":" + name + ":" + GlueHTTPUtils.getIp(RequestMethods.headers(null)), 1);
+					metrics.increment(METRICS_USERNAME_FAILED + ":" + name + ":" + GlueHTTPUtils.getIp(RequestMethods.headersArray(null)), 1);
 				}
 			}
 		}

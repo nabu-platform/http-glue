@@ -88,6 +88,7 @@ import be.nabu.libs.http.glue.impl.ServerMethods;
 import be.nabu.libs.http.glue.impl.SessionMethods;
 import be.nabu.libs.http.glue.impl.UserMethods;
 import be.nabu.libs.metrics.api.MetricInstance;
+import be.nabu.libs.metrics.api.MetricTimer;
 import be.nabu.libs.resources.URIUtils;
 import be.nabu.libs.types.ComplexContentWrapperFactory;
 import be.nabu.libs.types.DefinedTypeResolverFactory;
@@ -136,6 +137,15 @@ import be.nabu.utils.mime.impl.PlainMimePart;
  * 
  */
 public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
+	
+	private static final String METRIC_PAGE_HIT = "pageHit";
+	private static final String METRIC_CACHE_RETRIEVE = "cacheRetrieve";
+	private static final String METRIC_CACHE_STORE = "cacheStore";
+	private static final String METRIC_CACHE_HIT = "cacheHit";
+	private static final String METRIC_CACHE_MISS = "cacheMiss";
+	private static final String METRIC_CACHE_REFRESH = "cacheRefresh";
+	private static final String METRIC_EXECUTION_TIME = "executionTime";
+	private static final String METRIC_CACHE_HIT_WITH_CONTENT = "cacheHitWithContent";
 	
 	private MetricInstance metrics;
 	public static final String PUBLIC = "public";
@@ -280,6 +290,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		}
 		Device device = null;
 		Token token = null;
+		MetricTimer executionTimer = null;
 		try {
 			boolean secure = "true".equals(environment.getParameters().get("secure"));
 			URI uri = HTTPUtils.getURI(request, secure);
@@ -355,13 +366,20 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				return null;
 			}
 			// the script is matched on single name
-			if (requireFullName && !ScriptUtils.getFullName(script).equals(scriptPath)) {
+			String fullName = ScriptUtils.getFullName(script);
+			if (requireFullName && !fullName.equals(scriptPath)) {
 				return null;
 			}
 			boolean isPublicScript = isPublicScript(script);
 			if (!isPublicScript) {
 				return null;
 			}
+			
+			if (metrics != null) {
+				metrics.increment(METRIC_PAGE_HIT + ":" + fullName, 1);
+				executionTimer = metrics.start(METRIC_EXECUTION_TIME + ":" + fullName);
+			}
+			
 			Map<String, List<String>> cookies = HTTPUtils.getCookies(request.getContent().getHeaders());
 			// get the original session id to judge whether or not we have to set it later
 			String originalSessionId = getSessionId(cookies);
@@ -620,6 +638,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 //										if (maxAge != null && lastModified != null) {
 //											unchangedResponse.getContent().setHeader(buildExpireHeader(lastModified, maxAge));
 //										}
+										
+										if (metrics != null) {
+											metrics.increment(METRIC_CACHE_HIT + ":" + fullName, 1);
+										}
+										
 										return unchangedResponse;
 									}
 									else {
@@ -655,6 +678,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 										if (maxAge != null && maxAge > 0) {
 											unchangedResponse.getContent().setHeader(buildExpireHeader(lastModified, maxAge));
 										}
+										
+										if (metrics != null) {
+											metrics.increment(METRIC_CACHE_HIT + ":" + fullName, 1);
+										}
+										
 										return unchangedResponse;
 									}
 								}
@@ -662,6 +690,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						}
 					}
 
+					MetricTimer timer = metrics == null ? null : metrics.start(METRIC_CACHE_RETRIEVE + ":" + fullName);
 					// if we have a response from cache, return that
 					HTTPResponse response = (HTTPResponse) cache.get(serializedCacheKeyString);
 					if (response != null) {
@@ -715,8 +744,28 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 								response.getContent().setHeader(new MimeHeader("ETag", cacheHash));
 							}
 						}
+						
+						if (timer != null) {
+							timer.stop();
+						}
+						if (metrics != null) {
+							metrics.increment(METRIC_CACHE_HIT_WITH_CONTENT + ":" + fullName, 1);
+						}
 						return response;
 					}
+					if (timer != null) {
+						timer.stop();
+						metrics.increment(METRIC_CACHE_MISS + ":" + fullName, 1);
+					}
+				}
+			}
+			else if (cache != null && metrics != null) {
+				if (isCacheRefresh) {
+					metrics.increment(METRIC_CACHE_REFRESH + ":" + fullName, 1);
+				}
+				// don't think this is ever actually called?
+				else {
+					metrics.increment(METRIC_CACHE_MISS + ":" + fullName, 1);
 				}
 			}
 			SimpleExecutionContext executionContext = new SimpleExecutionContext(environment, null, "true".equals(environment.getParameters().get("debug")));
@@ -954,6 +1003,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				// the response should not contain any set-cookie commands
 				Header[] cookieHeaders = MimeUtils.getHeaders("Set-Cookie", response.getContent().getHeaders());
 				if (cookieHeaders == null || cookieHeaders.length == 0) {
+					MetricTimer timer = metrics == null ? null : metrics.start(METRIC_CACHE_STORE + ":" + fullName);
 					cache.put(serializedCacheKeyString, response);
 					if (storeRequest) {
 						cache.put("request==" + serializedCacheKeyString, request);
@@ -980,6 +1030,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 								response.getContent().setHeader(buildExpireHeader(entry.getLastModified(), maxAge));
 							}
 						}
+					}
+					if (timer != null) {
+						timer.stop();
 					}
 				}
 				else {
@@ -1014,6 +1067,11 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			httpException.setToken(token);
 			httpException.setDevice(device);
 			throw httpException;	
+		}
+		finally {
+			if (executionTimer != null) {
+				executionTimer.stop();
+			}
 		}
 	}
 

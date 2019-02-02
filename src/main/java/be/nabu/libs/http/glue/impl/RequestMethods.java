@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.ParseException;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +62,12 @@ public class RequestMethods {
 			: null;
 	}
 	
-	public static Header[] headers(@GlueParam(name = "name") String name) {
+	public static List<Header> headers(@GlueParam(name = "name") String name) {
+		Header[] headersArray = headersArray(name);
+		return headersArray == null ? null : Arrays.asList(headersArray);
+	}
+	
+	protected static Header[] headersArray(String name) {
 		if (entity().getContent() == null) {
 			return null;
 		}
