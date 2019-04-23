@@ -311,7 +311,7 @@ public class UserMethods {
 				// path
 				ServerMethods.cookiePath(), 
 				// domain
-				null, 
+				ServerMethods.cookieDomain(), 
 				// secure
 				(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
 				// http only
@@ -355,7 +355,7 @@ public class UserMethods {
 				// path
 				ServerMethods.cookiePath(), 
 				// domain
-				null, 
+				ServerMethods.cookieDomain(), 
 				// secure
 				(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
 				// http only
@@ -415,7 +415,7 @@ public class UserMethods {
 					// path
 					ServerMethods.cookiePath(), 
 					// domain
-					null, 
+					ServerMethods.cookieDomain(), 
 					// secure
 					(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
 					// http only

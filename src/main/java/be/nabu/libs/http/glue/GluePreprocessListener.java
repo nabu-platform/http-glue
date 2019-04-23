@@ -16,6 +16,9 @@ import be.nabu.glue.api.ScriptRepository;
 import be.nabu.glue.impl.SimpleExecutionContext;
 import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.authentication.api.Authenticator;
+import be.nabu.libs.authentication.api.DeviceValidator;
+import be.nabu.libs.authentication.api.PermissionHandler;
+import be.nabu.libs.authentication.api.RoleHandler;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.authentication.api.TokenValidator;
 import be.nabu.libs.events.api.EventHandler;
@@ -56,6 +59,9 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPEnt
 	private String preferredResponseType;
 	private Charset charset = Charset.defaultCharset();
 	private Authenticator authenticator;
+	private RoleHandler roleHandler;
+	private PermissionHandler permissionHandler;
+	private DeviceValidator deviceValidator;
 
 	public GluePreprocessListener(Authenticator authenticator, SessionProvider sessionProvider, ScriptRepository repository, ExecutionEnvironment environment, String serverPath) {
 		this.authenticator = authenticator;
@@ -143,8 +149,9 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPEnt
 			runtime.getContext().put(RequestMethods.COOKIES, cookies);
 			runtime.getContext().put(RequestMethods.PATH, new HashMap<String, List<String>>());
 			runtime.getContext().put(UserMethods.AUTHENTICATOR, authenticator);
-			runtime.getContext().put(UserMethods.ROLE_HANDLER, null);
-			runtime.getContext().put(UserMethods.PERMISSION_HANDLER, null);
+			runtime.getContext().put(UserMethods.ROLE_HANDLER, getRoleHandler());
+			runtime.getContext().put(UserMethods.PERMISSION_HANDLER, getPermissionHandler());
+			runtime.getContext().put(UserMethods.DEVICE_VALIDATOR, getDeviceValidator());
 			runtime.getContext().put(UserMethods.SSL_ONLY_SECRET, true);
 			runtime.getContext().put(UserMethods.REALM, realm);
 			runtime.getContext().put(SessionMethods.SESSION_PROVIDER, sessionProvider);
@@ -162,6 +169,9 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPEnt
 			StringWriter writer = new StringWriter();
 			runtime.setFormatter(new GlueHTTPFormatter(repository, charset, writer));
 			runtime.run();
+			if (runtime.getException() != null) {
+				throw runtime.getException();
+			}
 			
 			String writtenContent = writer.toString();
 			Charset charset = (Charset) runtime.getContext().get(ResponseMethods.RESPONSE_CHARSET);
@@ -177,15 +187,13 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPEnt
 			else {
 				// you performed a redirect, let's send it back immediately
 				Header locationHeader = MimeUtils.getHeader("Location", headers.toArray(new Header[headers.size()]));
-				if (locationHeader != null) {
-					Integer code = (Integer) runtime.getContext().get(ResponseMethods.RESPONSE_CODE);
+				Integer code = (Integer) runtime.getContext().get(ResponseMethods.RESPONSE_CODE);
+				if (locationHeader != null || code != null) {
 					if (code == null) {
 						code = 307;
 					}
 					PlainMimeEmptyPart part = new PlainMimeEmptyPart(null, headers.toArray(new Header[headers.size()]));
-					part.removeHeader("Content-Length");
-					part.removeHeader("Transfer-Encoding");
-					part.removeHeader("Content-Encoding");
+					clearRequestOnlyHeaders(part);
 					part.setHeader(new MimeHeader("Content-Length", "0"));
 					DefaultHTTPResponse response = new DefaultHTTPResponse(request, code, HTTPCodes.getMessage(code), part);
 					return response;
@@ -235,8 +243,23 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPEnt
 			) : null;
 		}
 		catch (Exception e) {
-			throw new HTTPException(500, e);
+			throw e instanceof HTTPException ? (HTTPException) e : new HTTPException(500, e);
 		}
+	}
+
+	private void clearRequestOnlyHeaders(PlainMimeEmptyPart part) {
+		part.removeHeader("Content-Length");
+		part.removeHeader("Transfer-Encoding");
+		part.removeHeader("Content-Encoding");
+		part.removeHeader("Authorization");
+		part.removeHeader("Accept");
+		part.removeHeader("Accept-Encoding");
+		part.removeHeader("Accept-Language");
+		part.removeHeader("Cookie");
+		part.removeHeader("Host");
+		part.removeHeader("User-Agent");
+		part.removeHeader("If-Modified-Since");
+		part.removeHeader("If-None-Match");
 	}
 
 	public TokenValidator getTokenValidator() {
@@ -277,6 +300,30 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPEnt
 
 	public void setCharset(Charset charset) {
 		this.charset = charset;
+	}
+
+	public RoleHandler getRoleHandler() {
+		return roleHandler;
+	}
+
+	public void setRoleHandler(RoleHandler roleHandler) {
+		this.roleHandler = roleHandler;
+	}
+
+	public PermissionHandler getPermissionHandler() {
+		return permissionHandler;
+	}
+
+	public void setPermissionHandler(PermissionHandler permissionHandler) {
+		this.permissionHandler = permissionHandler;
+	}
+
+	public DeviceValidator getDeviceValidator() {
+		return deviceValidator;
+	}
+
+	public void setDeviceValidator(DeviceValidator deviceValidator) {
+		this.deviceValidator = deviceValidator;
 	}
 
 }

@@ -176,6 +176,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	
 	private String cookiePath;
 	
+	private String cookieDomain;
+	
 	/**
 	 * You can toggle this if you always want the user to have a session
 	 */
@@ -642,7 +644,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 										if (metrics != null) {
 											metrics.increment(METRIC_CACHE_HIT + ":" + fullName, 1);
 										}
-										
+										// at this point i don't know for sure that it is HTML that you were requesting, so we can't inject the x-frame-options header accurately
 										return unchangedResponse;
 									}
 									else {
@@ -716,12 +718,15 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 							// set a cookie for the session if it's a new session
 							if (session != null && !session.getId().equals(originalSessionId)) {
 								// renew the session as well
-								ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
-								cookieHeader.addComment("Path=" + getCookiePath());
-								cookieHeader.addComment("HttpOnly");
-								if (rememberSecureOnly) {
-									cookieHeader.addComment("Secure");
-								}
+								ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(
+									SESSION_COOKIE, 
+									session.getId(),
+									null,
+									getCookiePath(),
+									getCookieDomain(),
+									isSecureCookiesOnly(),
+									true
+								);
 								response.getContent().setHeader(cookieHeader);
 							}
 							if (isNewDevice) {
@@ -731,9 +736,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 									new Date(new Date().getTime() + 1000l*60*60*24*365*100),
 									getCookiePath(),
 									// domain
-									null, 
-									// secure TODO?
-									false,
+									getCookieDomain(), 
+									// secure
+									isSecureCookiesOnly(),
 									// http only
 									true
 								);
@@ -778,6 +783,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			runtime.getContext().put(RequestMethods.URL, uri);
 			runtime.getContext().put(ServerMethods.ROOT_PATH, serverPath);
 			runtime.getContext().put(ServerMethods.COOKIE_PATH, getCookiePath());
+			runtime.getContext().put(ServerMethods.COOKIE_DOMAIN, getCookieDomain());
 			runtime.getContext().put(RequestMethods.ENTITY, request);
 			runtime.getContext().put(RequestMethods.GET, queryProperties);
 			runtime.getContext().put(RequestMethods.POST, formParameters);
@@ -835,18 +841,29 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			if (sessionDestroyed != null && sessionDestroyed) {
 				session = null;
 				// add an explicit header to set the cookie session to invalid
-				headers.add(HTTPUtils.newSetCookieHeader(SESSION_COOKIE, "invalid", new Date(new Date().getTime() - 1000l*60*60*24), getCookiePath(), null, null, true));
+				headers.add(HTTPUtils.newSetCookieHeader(
+					SESSION_COOKIE, 
+					"invalid", 
+					new Date(new Date().getTime() - 1000l*60*60*24), 
+					getCookiePath(), 
+					getCookieDomain(), 
+					isSecureCookiesOnly(), 
+					true
+				));
 			}
 			else {
 				session = getSession(sessionProvider, runtime); 
 				// set a cookie for the session if it's a new session
 				if (session != null && !session.getId().equals(originalSessionId)) {
-					ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
-					cookieHeader.addComment("Path=" + getCookiePath());
-					cookieHeader.addComment("HttpOnly");
-					if (rememberSecureOnly) {
-						cookieHeader.addComment("Secure");
-					}
+					ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(
+						SESSION_COOKIE, 
+						session.getId(), 
+						null, 
+						getCookiePath(), 
+						getCookieDomain(), 
+						isSecureCookiesOnly(), 
+						true
+					);
 					headers.add(cookieHeader);
 				}
 			}
@@ -880,12 +897,15 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						// otherwise it is impossible to perform the csrf check on incoming form data
 						if (session == null) {
 							session = sessionProvider.newSession();
-							ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(SESSION_COOKIE, session.getId());
-							cookieHeader.addComment("Path=" + getCookiePath());
-							cookieHeader.addComment("HttpOnly");
-							if (rememberSecureOnly) {
-								cookieHeader.addComment("Secure");
-							}
+							ModifiableHeader cookieHeader = HTTPUtils.newSetCookieHeader(
+								SESSION_COOKIE, 
+								session.getId(), 
+								null, 
+								getCookiePath(), 
+								getCookieDomain(), 
+								isSecureCookiesOnly(), 
+								true
+							);
 							headers.add(cookieHeader);
 							runtime.getContext().put(SessionMethods.SESSION, session);
 							
@@ -951,9 +971,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					new Date(new Date().getTime() + 1000l*60*60*24*365*100),
 					getCookiePath(),
 					// domain
-					null, 
-					// secure TODO?
-					false,
+					getCookieDomain(), 
+					// secure
+					isSecureCookiesOnly(),
 					// http only
 					true
 				);
@@ -1574,7 +1594,9 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			// this checks both application/xml and derivatives like "application/atom+xml"
 			|| contentType.matches("application/[^;]*xml")
 			// json and derivatives
-			|| contentType.matches("application/[^;]*json");
+			|| contentType.matches("application/[^;]*json")
+			// javascript itself
+			|| contentType.matches("application/javascript");
 	}
 
 	public boolean isAllowEncoding() {
@@ -1835,6 +1857,14 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public void setCookiePath(String cookiePath) {
 		this.cookiePath = cookiePath;
+	}
+	
+	public String getCookieDomain() {
+		return cookieDomain;
+	}
+
+	public void setCookieDomain(String cookieDomain) {
+		this.cookieDomain = cookieDomain;
 	}
 
 	public boolean isRequireResponse() {
