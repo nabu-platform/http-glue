@@ -52,6 +52,11 @@ public class RequestMethods {
 		return null;
 	}
 	
+	public static String userAgent() {
+		Header header = header("User-Agent");
+		return header == null ? null : MimeUtils.getFullHeaderValue(header);
+	}
+	
 	public static HTTPEntity entity() {
 		return (HTTPEntity) ScriptRuntime.getRuntime().getContext().get(ENTITY);
 	}
