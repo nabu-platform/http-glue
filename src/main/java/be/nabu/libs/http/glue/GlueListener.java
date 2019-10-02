@@ -1389,8 +1389,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 								String contentType = MimeUtils.getContentType(entity.getContent().getHeaders());
 								String charsetName = MimeUtils.getCharset(entity.getContent().getHeaders());
 								UnmarshallableBinding binding = MediaType.APPLICATION_JSON.equals(contentType)
-									? new JSONBinding(type, charset == null ? charset : Charset.forName(charsetName))
-									: new XMLBinding(type, charset == null ? charset : Charset.forName(charsetName));
+									? new JSONBinding(type, charsetName == null ? charset : Charset.forName(charsetName))
+									: new XMLBinding(type, charsetName == null ? charset : Charset.forName(charsetName));
 								try {
 									value = binding.unmarshal(IOUtils.toInputStream(readable, true), new Window[0]);
 								}
