@@ -8,7 +8,11 @@ import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.glue.utils.ScriptUtils;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
 import be.nabu.libs.http.HTTPException;
+import be.nabu.libs.http.api.HTTPEntity;
+import be.nabu.libs.http.core.ServerHeader;
 import be.nabu.libs.metrics.api.MetricInstance;
+import be.nabu.utils.mime.api.Header;
+import be.nabu.utils.mime.impl.MimeUtils;
 
 @MethodProviderClass(namespace = "server")
 public class ServerMethods {
@@ -24,8 +28,20 @@ public class ServerMethods {
 	
 	public static String root() {
 		String string = (String) ScriptRuntime.getRuntime().getContext().get(ROOT_PATH);
+		if ("$empty".equals(string)) {
+			return "";
+		}
+		HTTPEntity entity = RequestMethods.entity();
 		// make sure there is one trailing slash
-		return string == null ? "/" : string.replaceFirst("[/]$", "") + "/";
+		String result = string == null ? "/" : string.replaceFirst("[/]$", "") + "/";
+		if (entity != null && entity.getContent() != null) {
+			Header header = MimeUtils.getHeader(ServerHeader.PROXY_PATH.getName(), entity.getContent().getHeaders());
+			if (header != null && header.getValue() != null) {
+				result += header.getValue() + "/";
+				result = result.replaceAll("[/]{2,}", "/");
+			}
+		}
+		return result;
 	}
 	
 	public static void fail(String message, Integer code) {
