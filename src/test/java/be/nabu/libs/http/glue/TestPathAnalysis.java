@@ -31,4 +31,22 @@ public class TestPathAnalysis extends TestCase {
 		result = analyzed.analyze("test/haha/something/hehe/test");
 		assertTrue(result == null || result.isEmpty());
 	}
+	
+	public void testStartMatch() {
+		PathAnalysis analyzed = GlueListener.analyzePath("{var1}/test");
+		Map<String, String> result = analyzed.analyze("hehe/test");
+		assertEquals(result.get("var1"), "hehe");
+	}
+	
+	public void testEndMatch() {
+		PathAnalysis analyzed = GlueListener.analyzePath("hehe/{var1}");
+		Map<String, String> result = analyzed.analyze("hehe/test");
+		assertEquals(result.get("var1"), "test");
+	}
+	
+	public void testFullMatch2() {
+		PathAnalysis analyzed = GlueListener.analyzePath("{var1:.*}");
+		Map<String, String> result = analyzed.analyze("hehe/test");
+		assertEquals(result.get("var1"), "hehe/test");
+	}
 }
