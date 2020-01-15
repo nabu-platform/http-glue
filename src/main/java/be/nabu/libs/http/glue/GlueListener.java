@@ -1157,34 +1157,36 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		// but that means all the parts outside of the {} is not part of the regex, we should quote it, e.g. spryng has an API endpoint like this: /v1/messages?with[]=recipients
 		// the [] trigger exceptions if not escaped
 		StringBuilder builder = new StringBuilder();
-		if (pathValue.charAt(0) != '{') {
-			builder.append("\\Q");
-		}
-		int depth = 0;
-		for (int i = 0; i < pathValue.length(); i++) {
-			char charAt = pathValue.charAt(i);
-			if (charAt == '{') {
-				if (depth == 0 && i > 0) {
-					builder.append("\\E");
+		if (!pathValue.isEmpty()) {
+			if (pathValue.charAt(0) != '{') {
+				builder.append("\\Q");
+			}
+			int depth = 0;
+			for (int i = 0; i < pathValue.length(); i++) {
+				char charAt = pathValue.charAt(i);
+				if (charAt == '{') {
+					if (depth == 0 && i > 0) {
+						builder.append("\\E");
+					}
+					builder.append(charAt);
+					depth++;
 				}
-				builder.append(charAt);
-				depth++;
-			}
-			else if (charAt == '}') {
-				depth--;
-				builder.append(charAt);
-				// don't reopen a quoted block if it is the last character
-				if (depth == 0 && i < pathValue.length() - 1) {
-					builder.append("\\Q");
+				else if (charAt == '}') {
+					depth--;
+					builder.append(charAt);
+					// don't reopen a quoted block if it is the last character
+					if (depth == 0 && i < pathValue.length() - 1) {
+						builder.append("\\Q");
+					}
+				}
+				else {
+					builder.append(charAt);
 				}
 			}
-			else {
-				builder.append(charAt);
+			// close any remaining block
+			if (pathValue.charAt(pathValue.length() - 1) != '}') {
+				builder.append("\\E");
 			}
-		}
-		// close any remaining block
-		if (pathValue.charAt(pathValue.length() - 1) != '}') {
-			builder.append("\\E");
 		}
 		
 		// replace the "fixed" regexes, where you explicitly define a regex in the path
