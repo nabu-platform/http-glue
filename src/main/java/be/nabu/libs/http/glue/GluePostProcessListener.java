@@ -17,7 +17,9 @@ import be.nabu.glue.utils.ScriptRuntime;
 import be.nabu.libs.events.api.EventHandler;
 import be.nabu.libs.http.HTTPCodes;
 import be.nabu.libs.http.HTTPException;
+import be.nabu.libs.http.api.HTTPRequest;
 import be.nabu.libs.http.api.HTTPResponse;
+import be.nabu.libs.http.api.LinkableHTTPResponse;
 import be.nabu.libs.http.core.DefaultHTTPResponse;
 import be.nabu.libs.http.glue.impl.GlueHTTPFormatter;
 import be.nabu.libs.http.glue.impl.RequestMethods;
@@ -139,7 +141,12 @@ public class GluePostProcessListener implements EventHandler<HTTPResponse, HTTPR
 			}
 			responseChanged |= !writtenContent.isEmpty();
 
+			HTTPRequest original = null;
+			if (response instanceof LinkableHTTPResponse) {
+				original = ((LinkableHTTPResponse) response).getRequest();
+			}
 			return responseChanged ? new DefaultHTTPResponse(
+				original,
 				code,
 				HTTPCodes.getMessage(code),
 				part,

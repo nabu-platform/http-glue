@@ -129,12 +129,13 @@ public class ResponseMethods {
 	public static void content(Object response, String contentType) throws IOException, ParseException {
 		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
 		Charset usedCharset = null;
+		removeHeader("Transfer-Encoding");
+		removeHeader("Content-Encoding");
+		removeHeader("Content-Length");
 		if (response == null) {
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_EMPTY, true);
 			// nothing is known about the response, unset
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_STREAM, null);
-			removeHeader("Content-Length");
-			removeHeader("Content-Type");
 			contentType = null;
 		}
 		else if (response instanceof ModifiablePart) {
@@ -160,6 +161,8 @@ public class ResponseMethods {
 			usedCharset = getCharset();
 			byte[] bytes = ((String) response).getBytes(usedCharset);
 			ScriptRuntime.getRuntime().getContext().put(RESPONSE_STREAM, new ByteArrayInputStream(bytes));
+			// we are not setting gzipped content at this point
+			removeHeader("Content-Encoding");
 			header("Content-Length", "" + bytes.length, true);
 			// for a string a content type is required, otherwise it is impossible to correctly report the used charset later on (you can update the charset after having set the string content)
 			if (contentType == null) {
