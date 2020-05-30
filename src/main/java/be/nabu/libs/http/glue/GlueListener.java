@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -627,7 +628,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 									// if the etag still matches, send back a 304
 									if (cacheHash.equals(header.getValue())) {
 										// if it has not been modified, send back a 304
-										DefaultHTTPResponse unchangedResponse = new DefaultHTTPResponse(304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
+										DefaultHTTPResponse unchangedResponse = new DefaultHTTPResponse(request, 304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
 											new MimeHeader("Content-Length", "0"), 
 											new MimeHeader("ETag", cacheHash),
 											cacheHeader
@@ -672,7 +673,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 									Date ifModifiedSince = HTTPUtils.parseDate((String) header.getValue());
 									if (!ifModifiedSince.before(lastModified)) {
 										// if it has not been modified, send back a 304
-										DefaultHTTPResponse unchangedResponse = new DefaultHTTPResponse(304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
+										DefaultHTTPResponse unchangedResponse = new DefaultHTTPResponse(request, 304, HTTPCodes.getMessage(304), new PlainMimeEmptyPart(null, 
 											new MimeHeader("Content-Length", "0"), 
 											cacheHeader,
 											lastModifiedHeader
@@ -698,7 +699,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					if (response != null) {
 						if (response.getContent() instanceof ContentPart) {
 							// we rewrap the content part because we may want to add encoding etc but this would _also_ be used for further decoding (because of how it works)
-							response = new DefaultHTTPResponse(response.getCode(), response.getMessage(), new WrappedContentPart((ContentPart) response.getContent()), response.getVersion());
+							response = new DefaultHTTPResponse(request, response.getCode(), response.getMessage(), new WrappedContentPart((ContentPart) response.getContent()), response.getVersion());
 							if (allowEncoding) {
 								HTTPUtils.setContentEncoding(response.getContent(), request.getContent().getHeaders());
 							}
@@ -1575,6 +1576,16 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		// make sure empty values register as null
 		if (value instanceof String && ((String) value).trim().isEmpty()) {
 			value = null;
+		}
+		// delistify if necessary
+		if (executor.getContext().getAnnotations().containsKey("single") && value instanceof Iterable) {
+			Iterator iterator = ((Iterable) value).iterator();
+			if (iterator.hasNext()) {
+				value = iterator.next();
+			}
+			else {
+				value = null;
+			}
 		}
 		return value;
 	}
