@@ -15,12 +15,14 @@ import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.PotentialPermissionHandler;
 import be.nabu.libs.authentication.api.RefreshableToken;
 import be.nabu.libs.authentication.api.RoleHandler;
+import be.nabu.libs.authentication.api.SecretGenerator;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.authentication.api.TokenValidator;
 import be.nabu.libs.authentication.api.TokenWithSecret;
 import be.nabu.libs.authentication.api.principals.BasicPrincipal;
 import be.nabu.libs.authentication.api.principals.DevicePrincipal;
 import be.nabu.libs.authentication.api.principals.SharedSecretPrincipal;
+import be.nabu.libs.authentication.impl.BasicPrincipalWithDeviceImpl;
 import be.nabu.libs.authentication.impl.DeviceImpl;
 import be.nabu.libs.authentication.impl.ImpersonateToken;
 import be.nabu.libs.evaluator.annotations.MethodProviderClass;
@@ -158,6 +160,7 @@ public class UserMethods {
 
 	public static final String SSL_ONLY_SECRET = "sslOnlySecret";
 	public static final String AUTHENTICATOR = "authenticator";
+	public static final String SECRET_GENERATOR = "secretGenerator";
 	public static final String DEVICE_VALIDATOR = "deviceValidator";
 	public static final String ROLE_HANDLER = "roleHandler";
 	public static final String TOKEN_VALIDATOR = "tokenValidator";
@@ -370,7 +373,8 @@ public class UserMethods {
 			@GlueParam(name = "name", description = "The user name") final String name, 
 			@GlueParam(name = "password", description = "The user password") final String password,
 			@GlueParam(name = "remember", description = "Whether or not to remember this login", defaultValue = "true") final Boolean remember,
-			@GlueParam(name = "persist", description = "Whether or not to persist this login in a session", defaultValue = "true") Boolean persist) {
+			@GlueParam(name = "persist", description = "Whether or not to persist this login in a session", defaultValue = "true") Boolean persist,
+			@GlueParam(name = "type", description = "The authentication type, e.g. password, secret, temporary...") String type) {
 		if (isBlacklisted()) {
 			throw new HTTPException(429);
 		}
@@ -386,6 +390,7 @@ public class UserMethods {
 				deviceId = UUID.randomUUID().toString().replace("-", "");
 				isNewDevice = true;
 			}
+			DeviceImpl device = new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headersArray(null)), GlueHTTPUtils.getHost(RequestMethods.headersArray(null)));
 			Token token;
 			if (name == null) {
 				BasicAuthenticationHandler handler = new BasicAuthenticationHandler(authenticator, new FixedRealmHandler(realm));
@@ -399,11 +404,13 @@ public class UserMethods {
 				}
 			}
 			else {
-				token = authenticator.authenticate(realm, new BasicPrincipalImplementation(
-					password, 
+				BasicPrincipalWithDeviceImpl basicPrincipalImplementation = new BasicPrincipalWithDeviceImpl(
 					name, 
-					new DeviceImpl(deviceId, GlueHTTPUtils.getUserAgent(RequestMethods.headersArray(null)), GlueHTTPUtils.getHost(RequestMethods.headersArray(null)))
-				));
+					password, 
+					device
+				);
+				basicPrincipalImplementation.setType(type);
+				token = authenticator.authenticate(realm, basicPrincipalImplementation);
 			}
 			// if it's a new device, set a cookie for it
 			if (token != null && isNewDevice) {
@@ -423,21 +430,30 @@ public class UserMethods {
 				);
 			}
 			// if we have generated a token with a secret, set it in a cookie to be remembered
-			if (token instanceof TokenWithSecret && ((TokenWithSecret) token).getSecret() != null && (remember == null || remember)) {
-				ResponseMethods.cookie(
-					"Realm-" + realm, 
-					token.getName() + "/" + ((TokenWithSecret) token).getSecret(), 
-					// if there is no valid until in the token, set it to a year
-					token.getValidUntil() == null ? new Date(new Date().getTime() + 1000l*60*60*24*365) : token.getValidUntil(),
-					// path
-					ServerMethods.cookiePath(), 
-					// domain
-					null, 
-					// secure
-					(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
-					// http only
-					true
-				);
+			if (remember == null || remember) {
+				String secret = token instanceof TokenWithSecret ? ((TokenWithSecret) token).getSecret() : null;
+				if (secret == null) {
+					SecretGenerator generator = (SecretGenerator) ScriptRuntime.getRuntime().getContext().get(SECRET_GENERATOR);
+					if (generator != null) {
+						secret = generator.generate(token, device);
+					}
+				}
+				if (secret != null) {
+					ResponseMethods.cookie(
+						"Realm-" + realm, 
+						token.getName() + "/" + secret, 
+						// if there is no valid until in the token, set it to a year
+						token.getValidUntil() == null ? new Date(new Date().getTime() + 1000l*60*60*24*365) : token.getValidUntil(),
+						// path
+						ServerMethods.cookiePath(), 
+						// domain
+						null, 
+						// secure
+						(Boolean) ScriptRuntime.getRuntime().getContext().get(SSL_ONLY_SECRET),
+						// http only
+						true
+					);
+				}
 			}
 			// recreate the session to prevent session spoofing
 			if (token != null) {

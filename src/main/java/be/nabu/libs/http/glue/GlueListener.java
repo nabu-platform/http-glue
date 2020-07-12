@@ -53,6 +53,7 @@ import be.nabu.libs.authentication.api.Device;
 import be.nabu.libs.authentication.api.DeviceValidator;
 import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.RoleHandler;
+import be.nabu.libs.authentication.api.SecretGenerator;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.authentication.api.TokenValidator;
 import be.nabu.libs.authentication.impl.DeviceImpl;
@@ -163,6 +164,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private Authenticator authenticator;
 	private TokenValidator tokenValidator;
 	private DeviceValidator deviceValidator;
+	private SecretGenerator secretGenerator;
 	private GlueScriptCallValidator scriptCallValidator;
 	private String preferredContentType = MediaType.APPLICATION_JSON;
 	private boolean scanBefore = false;
@@ -803,6 +805,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			runtime.getContext().put(ServerMethods.METRICS, metrics);
 			runtime.getContext().put(UserMethods.INVALID_TOKEN, invalidToken);
 			runtime.getContext().put(UserMethods.TOKEN_VALIDATOR, getTokenValidator());
+			runtime.getContext().put(UserMethods.SECRET_GENERATOR, getSecretGenerator());
 			
 			if (filePath != null) {
 				runtime.getContext().put(SystemMethodProvider.CLI_DIRECTORY, filePath);
@@ -1936,5 +1939,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 
 	public void setScriptCallValidator(GlueScriptCallValidator scriptCallValidator) {
 		this.scriptCallValidator = scriptCallValidator;
+	}
+
+	public SecretGenerator getSecretGenerator() {
+		return secretGenerator;
+	}
+
+	public void setSecretGenerator(SecretGenerator secretGenerator) {
+		this.secretGenerator = secretGenerator;
 	}
 }
