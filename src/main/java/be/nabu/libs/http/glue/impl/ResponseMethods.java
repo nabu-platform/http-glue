@@ -258,6 +258,9 @@ public class ResponseMethods {
 		if (charset == null) {
 			charset = (Charset) ScriptRuntime.getRuntime().getContext().get(RESPONSE_DEFAULT_CHARSET);
 		}
+		if (charset == null) {
+			charset = Charset.forName("UTF-8");
+		}
 		return charset;
 	}
 	
