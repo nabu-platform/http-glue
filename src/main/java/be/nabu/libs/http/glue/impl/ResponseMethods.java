@@ -238,6 +238,9 @@ public class ResponseMethods {
 			@GlueParam(name = "secure") Boolean secure, 
 			@GlueParam(name = "httpOnly") Boolean httpOnly) {
 		ScriptRuntime.getRuntime().getContext().put(RESPONSE_CHANGED, true);
+		if (path == null) {
+			path = (String) ScriptRuntime.getRuntime().getContext().get(ServerMethods.COOKIE_PATH);
+		}
 		ModifiableHeader header = HTTPUtils.newSetCookieHeader(key, value, expires, path, domain, secure, httpOnly);
 		List<Header> headers = (List<Header>) ScriptRuntime.getRuntime().getContext().get(ResponseMethods.RESPONSE_HEADERS);
 		if (headers == null) {

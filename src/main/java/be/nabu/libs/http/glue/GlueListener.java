@@ -17,6 +17,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -149,6 +150,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private static final String METRIC_EXECUTION_TIME = "executionTime";
 	private static final String METRIC_CACHE_HIT_WITH_CONTENT = "cacheHitWithContent";
 	
+	private Predicate<HTTPRequest> offlineChecker;
 	private MetricInstance metrics;
 	public static final String PUBLIC = "public";
 	private static final String CSRF_TOKEN = "csrfToken";
@@ -378,6 +380,13 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			boolean isPublicScript = isPublicScript(script);
 			if (!isPublicScript) {
 				return null;
+			}
+			
+			if (offlineChecker != null) {
+				boolean isIgnoreOffline = script.getRoot().getContext() != null && script.getRoot().getContext().getAnnotations() != null && script.getRoot().getContext().getAnnotations().containsKey("ignoreOffline");
+				if (!isIgnoreOffline) {
+					offlineChecker.test(request);
+				}
 			}
 			
 			if (metrics != null) {
@@ -1948,4 +1957,12 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	public void setSecretGenerator(SecretGenerator secretGenerator) {
 		this.secretGenerator = secretGenerator;
 	}
+
+	public Predicate<HTTPRequest> getOfflineChecker() {
+		return offlineChecker;
+	}
+	public void setOfflineChecker(Predicate<HTTPRequest> offlineChecker) {
+		this.offlineChecker = offlineChecker;
+	}
+	
 }
