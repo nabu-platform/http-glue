@@ -96,5 +96,6 @@
 			<groupId>be.nabu.libs.cache</groupId>
 			<artifactId>cache-api</artifactId>
 		</dependency>
+		
 	</dependencies>
 </project>
