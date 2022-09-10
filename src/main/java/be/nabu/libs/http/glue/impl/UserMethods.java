@@ -22,6 +22,7 @@ import be.nabu.libs.authentication.api.TokenWithSecret;
 import be.nabu.libs.authentication.api.principals.BasicPrincipal;
 import be.nabu.libs.authentication.api.principals.DevicePrincipal;
 import be.nabu.libs.authentication.api.principals.SharedSecretPrincipal;
+import be.nabu.libs.authentication.api.principals.TypedPrincipal;
 import be.nabu.libs.authentication.impl.BasicPrincipalWithDeviceImpl;
 import be.nabu.libs.authentication.impl.DeviceImpl;
 import be.nabu.libs.authentication.impl.ImpersonateToken;
@@ -40,7 +41,7 @@ import be.nabu.libs.metrics.api.MetricInstance;
 @MethodProviderClass(namespace = "user")
 public class UserMethods {
 
-	public static final class SharedSecretPrincipalImplementation implements SharedSecretPrincipal, DevicePrincipal {
+	public static final class SharedSecretPrincipalImplementation implements SharedSecretPrincipal, DevicePrincipal, TypedPrincipal {
 		private String secret;
 		private String name;
 		private static final long serialVersionUID = 1L;
@@ -81,6 +82,21 @@ public class UserMethods {
 
 		public void setName(String name) {
 			this.name = name;
+		}
+
+		@Override
+		public String getPassword() {
+			return secret;
+		}
+
+		@Override
+		public String getType() {
+			return "secret";
+		}
+
+		@Override
+		public String getSubType() {
+			return null;
 		}
 	}
 	
