@@ -61,10 +61,16 @@ public class UserMethods {
 		public String getName() {
 			return name;
 		}
+		public void setName(String name) {
+			this.name = name;
+		}
 
 		@Override
 		public String getSecret() {
 			return secret;
+		}
+		public void setSecret(String secret) {
+			this.secret = secret;
 		}
 
 		@Override
@@ -76,27 +82,28 @@ public class UserMethods {
 			this.device = device;
 		}
 
-		public void setSecret(String secret) {
-			this.secret = secret;
-		}
-
-		public void setName(String name) {
-			this.name = name;
-		}
-
 		@Override
 		public String getPassword() {
 			return secret;
+		}
+		public void setPassword(String password) {
+			this.secret = password;
 		}
 
 		@Override
 		public String getType() {
 			return "secret";
 		}
+		public void setType(String type) {
+			// do nothing?
+		}
 
 		@Override
 		public String getSubType() {
 			return null;
+		}
+		public void setSubType(String subType) {
+			// do nothing!
 		}
 	}
 	
