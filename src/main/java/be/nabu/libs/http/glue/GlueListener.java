@@ -81,6 +81,7 @@ import be.nabu.libs.http.api.server.Session;
 import be.nabu.libs.http.api.server.SessionProvider;
 import be.nabu.libs.http.core.DefaultHTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
+import be.nabu.libs.http.core.SameSite;
 import be.nabu.libs.http.glue.api.CacheKeyProvider;
 import be.nabu.libs.http.glue.impl.GlueCSSFormatter;
 import be.nabu.libs.http.glue.impl.GlueHTTPFormatter;
@@ -150,6 +151,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private static final String METRIC_EXECUTION_TIME = "executionTime";
 	private static final String METRIC_CACHE_HIT_WITH_CONTENT = "cacheHitWithContent";
 	
+	private SameSite defaultCookieSitePolicy;
 	private Predicate<HTTPRequest> offlineChecker;
 	private MetricInstance metrics;
 	public static final String PUBLIC = "public";
@@ -752,7 +754,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 									// secure
 									isSecureCookiesOnly(),
 									// http only
-									true
+									true,
+									defaultCookieSitePolicy
 								);
 								response.getContent().setHeader(cookieHeader);
 							}
@@ -988,7 +991,8 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					// secure
 					isSecureCookiesOnly(),
 					// http only
-					true
+					true,
+					defaultCookieSitePolicy
 				);
 				headers.add(cookieHeader);
 			}
@@ -1963,6 +1967,14 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	}
 	public void setOfflineChecker(Predicate<HTTPRequest> offlineChecker) {
 		this.offlineChecker = offlineChecker;
+	}
+
+	public SameSite getDefaultCookieSitePolicy() {
+		return defaultCookieSitePolicy;
+	}
+
+	public void setDefaultCookieSitePolicy(SameSite defaultCookieSitePolicy) {
+		this.defaultCookieSitePolicy = defaultCookieSitePolicy;
 	}
 	
 }
