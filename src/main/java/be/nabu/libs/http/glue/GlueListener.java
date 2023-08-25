@@ -162,6 +162,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private Charset charset = Charset.defaultCharset();
 	private boolean allowPathLookup = true;
 	private boolean refreshScripts = Boolean.parseBoolean(System.getProperty("glue.refresh", "false"));
+	private boolean disableRefreshScripts = Boolean.parseBoolean(System.getProperty("glue.disableRefresh", "false"));
 	private String extension;
 	private SessionProvider sessionProvider;
 	public static final String SESSION_COOKIE = "JSESSIONID";
@@ -289,7 +290,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	
 	@SuppressWarnings("unchecked")
 	public HTTPResponse handle(HTTPRequest request, boolean isCacheRefresh) {
-		if (refreshScripts) {
+		if (refreshScripts && !disableRefreshScripts) {
 			try {
 				repository.refresh();
 			}
