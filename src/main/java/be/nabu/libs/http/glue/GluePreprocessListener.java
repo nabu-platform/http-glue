@@ -79,7 +79,8 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPEnt
 				repository.refresh();
 			}
 			
-			URI uri = HTTPUtils.getURI(request, false);
+			boolean secure = "true".equals(environment.getParameters().get("secure"));
+			URI uri = HTTPUtils.getURI(request, secure);
 			String path = URIUtils.normalize(uri.getPath()).replaceFirst("^[/]+", "");
 			Script preprocessScript = null;
 			// we search for a preprocess script on the path somewhere
@@ -142,6 +143,7 @@ public class GluePreprocessListener implements EventHandler<HTTPRequest, HTTPEnt
 			
 			ScriptRuntime runtime = new ScriptRuntime(preprocessScript, executionContext, input);
 			
+			runtime.getContext().put(RequestMethods.URL, uri);
 			runtime.getContext().put(ServerMethods.ROOT_PATH, serverPath);
 			runtime.getContext().put(RequestMethods.ENTITY, request);
 			runtime.getContext().put(RequestMethods.GET, queryProperties);

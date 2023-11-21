@@ -354,7 +354,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				// look up the path for a valid script with an "path" annotation
 				while (script == null && scriptPath.contains(".")) {
 					int index = scriptPath.lastIndexOf('.');
-					scriptPath = scriptPath.substring(0, index);
+					scriptPath = index >= 0 ? scriptPath.substring(0, index) : scriptPath;
 					Script possibleScript = repository.getScript(scriptPath);
 					if (possibleScript != null && possibleScript.getRoot() != null && possibleScript.getRoot().getContext() != null && possibleScript.getRoot().getContext().getAnnotations() != null && possibleScript.getRoot().getContext().getAnnotations().get("path") != null) {
 						String pathValue = possibleScript.getRoot().getContext().getAnnotations().get("path");
@@ -362,7 +362,7 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 							pathAnalysis.put(pathValue, analyzePath(pathValue));
 						}
 						// the +1 is to also skip the "." after the script name
-						String remainingPath = originalPath.substring(scriptPath.length() + 1);
+						String remainingPath = index >= 0 ? originalPath.substring(scriptPath.length() + 1) : originalPath.substring(scriptPath.length());
 						Map<String, String> analyze = pathAnalysis.get(pathValue).analyze(remainingPath);
 						if (analyze != null) {
 							script = possibleScript;
