@@ -956,7 +956,18 @@ public class GlueListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				}
 				// we add click jacking prevention
 				if ((contentType == null || contentType.getValue().equalsIgnoreCase("text/html")) && addClickJackingPrevention && !noClickJackingPrevention) {
-					headers.add(new MimeHeader("X-Frame-Options", "DENY"));
+					boolean alreadySet = false;
+					// for oauth2 we make an exception so we can embed it in an iframe
+					if (request.getTarget().contains("state=") && (request.getTarget().contains("code=") || request.getTarget().contains("error="))) {
+						// check further that they are indeed query parameters
+						if (request.getTarget().matches("^.*\\?[^#]+\\bstate=[^#]+\\b(error|code)=.*$")) {
+							headers.add(new MimeHeader("X-Frame-Options", "SAMEORIGIN"));
+							alreadySet = true;
+						}
+					}
+					if (!alreadySet) {
+						headers.add(new MimeHeader("X-Frame-Options", "DENY"));
+					}
 				}
 			}
 			
