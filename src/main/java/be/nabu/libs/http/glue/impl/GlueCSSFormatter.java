@@ -125,6 +125,16 @@ public class GlueCSSFormatter implements OutputFormatter {
 	}
 	
 	@Override
+	public void error(Executor executor, Exception exception) {
+		if (!(executor instanceof AssignmentExecutor) && executor instanceof ExecutorGroup && !context.isEmpty() && context.peek().equals(executor)) {
+			context.pop();
+			contextPrinted = false;
+			parentPrinted = false;
+		}
+		parent.error(executor, exception);
+	}
+
+	@Override
 	public void print(Object...messages) {
 		if (messages != null && messages.length > 0) {
 			for (Object message : messages) {
